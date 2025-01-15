@@ -18,10 +18,10 @@ import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
-import dsp3.CalcVariablesStep.MapperClass;
+import dsp3.countsStep.MapperClass;
 
 
-public class CalcVariablesStep 
+public class countsStep 
 {
 
 	public static class MapperClass extends Mapper<LongWritable, Text, Text, Text>{
@@ -144,7 +144,7 @@ public class CalcVariablesStep
 		Configuration conf = new Configuration();
 		// conf.set("bucket_name", bucketName);
 		Job job = Job.getInstance(conf, args[0]);
-		job.setJarByClass(CalcVariablesStep.class);
+		job.setJarByClass(countsStep.class);
 
 		job.setMapperClass(MapperClass.class);
 		job.setReducerClass(ReducerClass.class);
