@@ -72,7 +72,7 @@ public class AWS_Hadoop_setup {
         RunJobFlowResponse runJobFlowResult = emrClient.runJobFlow(runFlowRequest);
         String jobFlowId = runJobFlowResult.jobFlowId();
 
-        AWS.getInstance().sendSQSMessage("job-completion-time", "job: " + Env.PROJECT_NAME + " started at " + System.currentTimeMillis());
+        // AWS.getInstance().sendSQSMessage("job-completion-time", "job: " + Env.PROJECT_NAME + " started at " + System.currentTimeMillis());
         System.out.println("Ran job flow with id: " + jobFlowId);
     }
 }
