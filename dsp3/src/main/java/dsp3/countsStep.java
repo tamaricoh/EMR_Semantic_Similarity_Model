@@ -32,11 +32,20 @@ public class countsStep
 		private Map<String, Map<String, Integer>> wordPairsMap = new HashMap<>();
 		private Text newKey = new Text();
 		private Text newVal = new Text();
+		static AWS aws = AWS.getInstance();
 
 		protected void setup(Context context) throws IOException {
-			String filePath = getClass().getResource("/resources/word-relatedness.txt").getPath();
+			String localDir = "/tmp";
+			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
 
-			BufferedReader reader = new BufferedReader(new FileReader(filePath));
+			File directory = new File(localDir);
+			if (!directory.exists()) {
+				directory.mkdirs();
+			}
+
+			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey , localDir);
+
+			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
 			String line;
 
 			while ((line = reader.readLine()) != null) {
@@ -69,11 +78,16 @@ public class countsStep
 			for (int i = 0; i < wordsInfo.length; i++) {
 				// utilize stemmer ======================================
 				String[] wordInfo = wordsInfo[i].split(Env.FORWARD_SLASH);
-				String word = wordInfo[0].toLowerCase();
-				String dependencyLabel = wordInfo[1].toLowerCase();
-				int relatedTo = Integer.parseInt(wordInfo[3]);
-				int position = i+1;
-				words.add(new WordPosition(word, position, dependencyLabel, relatedTo));
+				if (wordInfo.length >= 4){
+					String word = wordInfo[0].toLowerCase();
+					String dependencyLabel = wordInfo[1].toLowerCase();
+					int relatedTo = Integer.parseInt(wordInfo[3]);
+					int position = i+1;
+					words.add(new WordPosition(word, position, dependencyLabel, relatedTo));
+				}
+				else {
+					System.err.println("[Tamar] Warning: Skipping malformed word info: " + wordsInfo[i]);
+				}
 			}
 			
 			// Sort words according to compareTo func
@@ -185,7 +199,7 @@ public class countsStep
 			}
 			Text val = new Text();
 			for (Writable featureKey : featureSet.keySet()) {
-				val.set(((Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
+				val.set((val.toString() + "::" + (Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
 				context.write(key, val);
 			}
 		}
@@ -198,14 +212,14 @@ public class countsStep
 		job.setJarByClass(countsStep.class);
 
 		job.setMapperClass(MapperClass.class);
-		job.setReducerClass(ReducerClass.class);
+		job.setReducerClass(CombinerClass.class); //TODO 
         job.setPartitionerClass(PartitionerClass.class);
 
 		job.setMapOutputKeyClass(Text.class);
 		job.setMapOutputValueClass(Text.class);
 
 		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(MapWritable.class);
+		job.setOutputValueClass(Text.class);
 
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
