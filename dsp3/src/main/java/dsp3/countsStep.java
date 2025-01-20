@@ -5,6 +5,7 @@ import java.util.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -15,17 +16,20 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import dsp3.countsStep.MapperClass;
+import dsp3.countsStep.ReducerClass;
 
 
 public class countsStep 
 {
 
 	public static class MapperClass extends Mapper<LongWritable, Text, Text, Text>{
-		private Map<String, Map<String, Boolean>> wordPairsMap = new HashMap<>();
+		private Map<String, Map<String, Integer>> wordPairsMap = new HashMap<>();
 		private Text newKey = new Text();
 		private Text newVal = new Text();
 
@@ -36,14 +40,17 @@ public class countsStep
 			String line;
 
 			while ((line = reader.readLine()) != null) {
+				// Stemming
 				String[] parts = line.split("\t");
 				if (parts.length == 3) {
-					String w1 = parts[0];
-					String w2 = parts[1];
-					boolean value = Boolean.parseBoolean(parts[2]);
+					String w1 = parts[0].toLowerCase();
+					String w2 = parts[1].toLowerCase();
+					// boolean value = Boolean.parseBoolean(parts[2]);
 
 					wordPairsMap.putIfAbsent(w1, new HashMap<>());
-					wordPairsMap.get(w1).put(w2, value);
+					wordPairsMap.get(w1).put(w2, 0);
+					wordPairsMap.putIfAbsent(w2, new HashMap<>());
+					wordPairsMap.get(w2).put(w1, 0);
 				}
 			}
 			reader.close();
@@ -60,29 +67,36 @@ public class countsStep
 			// Extract only the words and their positions from the dependency parse
 			List<WordPosition> words = new ArrayList<>();
 			for (int i = 0; i < wordsInfo.length; i++) {
+				// utilize stemmer ======================================
 				String[] wordInfo = wordsInfo[i].split(Env.FORWARD_SLASH);
 				String word = wordInfo[0].toLowerCase();
-				String relation = wordInfo[1].toLowerCase();
+				String dependencyLabel = wordInfo[1].toLowerCase();
 				int relatedTo = Integer.parseInt(wordInfo[3]);
-				int position = i;
-				words.add(new WordPosition(word, position, relation, relatedTo));
-			
+				int position = i+1;
+				words.add(new WordPosition(word, position, dependencyLabel, relatedTo));
 			}
 			
 			// Sort words according to compareTo func
 			Collections.sort(words);
 			
 			for (int i = 0; i < words.size(); i++) {
-				String word1 = words.get(i).word;
+				WordPosition word1 = words.get(i);
 				
-				if (wordPairsMap.containsKey(word1)) {
-					// Check all other words that come after word1 in the sentence ????????????????
+				if (wordPairsMap.containsKey(word1.word)) {
 					for (int j = i + 1; j < words.size(); j++) {
-						String word2 = words.get(j).word;
+						WordPosition word2 = words.get(j);
 						
-						if (wordPairsMap.get(word1).containsKey(word2)) {
-							addCounts_etc(word1, word2);
-							// context.write("bla", "bla");
+						if (wordPairsMap.get(word1.word).containsKey(word2.word) && word1.position == word2.relatedTo) {
+
+							// Random Variable F
+							newKey.set("Feature"); // Uppercase letter to diffrentiate from word in corpus.
+							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
+							context.write(newKey, newVal);
+
+							// Random Variable L
+							newKey.set(word1.word);
+							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
+							context.write(newKey, newVal);
 						}
 					}
 				}
@@ -92,13 +106,13 @@ public class countsStep
 		private static class WordPosition implements Comparable<WordPosition> {
 			String word;
 			int position;
-			String relation;
+			String dependencyLabel;
 			int relatedTo;
 		
-			WordPosition(String word, int position, String relation, int relatedTo) {
+			WordPosition(String word, int position, String dependencyLabel, int relatedTo) {
 				this.word = word;
 				this.position = position;
-				this.relation = relation;
+				this.dependencyLabel = dependencyLabel;
 				this.relatedTo = relatedTo;
 			}
 		
@@ -107,23 +121,35 @@ public class countsStep
 				// Compare based on position
 				return Integer.compare(this.position, other.position);
 			}
-		}
-		
-		// This is a placeholder for the exists function that will be implemented later
-		private void addCounts_etc(String word1, String word2) {
-			// Implementation will be provided later
-			// context.write("bla", "bla");
-		}   
+		}  
 	}
-	public static class ReducerClass extends Reducer<Text,Text,Text,Text>{
-		private Text newKey = new Text();
-		private Text newVal = new Text();
 
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException
-		{
-           
-        }
-    }
+	public static class ReducerClass extends Reducer<Text, Text, Text, MapWritable> {
+		private Text feature = new Text();
+		private IntWritable zero = new IntWritable(0);
+	
+		@Override
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			MapWritable featureSet = new MapWritable();
+	
+			for (Text val : values) {
+				// Parse the input value
+				String[] parts = val.toString().split(Env.DASH);
+				feature.set(parts[0] + Env.DASH + parts[1]);
+				IntWritable currentCount = new IntWritable(Integer.parseInt(parts[2]));
+	
+				// Calculate the updated count
+				IntWritable existingCount = (IntWritable) featureSet.getOrDefault(feature, zero);
+				IntWritable updatedCount = new IntWritable(existingCount.get() + currentCount.get());
+	
+				// Update the featureSet with the new count
+				featureSet.put(new Text(feature), updatedCount);
+			}
+	
+			// Write the key and the updated featureSet to the context
+			context.write(key, featureSet);
+		}
+	}
 	
 	public static class PartitionerClass extends Partitioner<Text, Text> {
         @Override
@@ -133,13 +159,34 @@ public class countsStep
     }
 
 	public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
-		private Text combinedValue = new Text();
+		private Text feature = new Text();
+		private IntWritable zero = new IntWritable(0);
 	
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-
+			MapWritable featureSet = new MapWritable();
+	
+			for (Text val : values) {
+				// Parse the input value
+				String[] parts = val.toString().split(Env.DASH);
+				feature.set(parts[0] + Env.DASH + parts[1]);
+				IntWritable currentCount = new IntWritable(Integer.parseInt(parts[2]));
+	
+				// Calculate the updated count
+				IntWritable existingCount = (IntWritable) featureSet.getOrDefault(feature, zero);
+				IntWritable updatedCount = new IntWritable(existingCount.get() + currentCount.get());
+	
+				// Update the featureSet with the new count
+				featureSet.put(new Text(feature), updatedCount);
+			}
+			Text val = new Text();
+			for (Writable featureKey : featureSet.keySet()) {
+				val.set(((Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
+				context.write(key, val);
+			}
 		}
 	}
+
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
 		// conf.set("bucket_name", bucketName);
@@ -151,10 +198,10 @@ public class countsStep
         job.setPartitionerClass(PartitionerClass.class);
 
 		job.setMapOutputKeyClass(Text.class);
-		job.setMapOutputValueClass(DoubleWritable.class);
+		job.setMapOutputValueClass(Text.class);
 
 		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(DoubleWritable.class);
+		job.setOutputValueClass(MapWritable.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class); //FOR HEB-3GRAMS
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);

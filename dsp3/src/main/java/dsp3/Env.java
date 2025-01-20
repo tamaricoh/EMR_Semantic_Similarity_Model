@@ -6,7 +6,9 @@ public class Env {
 
     public static final String TAB = "\t";
     public static final String SPACE = "\\s"; 
-    public static final String FORWARD_SLASH = "/"; 
+    public static final String FORWARD_SLASH = "/";
+    public static final String DASH = "-";
+
     //to run change these:
     // public static String stopWordsFile = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_2\\dsp_2\\src\\main\\resources\\heb-stopwords.txt";
     // public static final String PATH_TO_TARGET = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_2\\dsp_2\\target";
