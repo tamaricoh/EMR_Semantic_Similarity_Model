@@ -83,22 +83,26 @@ public class countsStep
 				WordPosition word1 = words.get(i);
 				
 				if (wordPairsMap.containsKey(word1.word)) {
-					for (int j = i + 1; j < words.size(); j++) {
+					for (int j = 0; j < words.size(); j++) {
 						WordPosition word2 = words.get(j);
 						
-						if (wordPairsMap.get(word1.word).containsKey(word2.word) && word1.position == word2.relatedTo) {
+						if (word1.position == word2.relatedTo && wordPairsMap.get(word1.word).containsKey(word2.word)) {
 
 							// Random Variable F
 							newKey.set("Feature"); // Uppercase letter to diffrentiate from word in corpus.
 							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
 							context.write(newKey, newVal);
 
-							// Random Variable L
+							// Random Variable F,L
 							newKey.set(word1.word);
 							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
 							context.write(newKey, newVal);
 						}
 					}
+					// Random Variable L
+					newKey.set("Lemmata"); // Uppercase letter to diffrentiate from word in corpus.
+					newVal.set(word1.word + Env.DASH + Env.DASH + parts[2]);
+					context.write(newKey, newVal);
 				}
 			}
 		}
@@ -203,8 +207,8 @@ public class countsStep
 		job.setOutputKeyClass(Text.class);
 		job.setOutputValueClass(MapWritable.class);
 
-		job.setInputFormatClass(SequenceFileInputFormat.class); //FOR HEB-3GRAMS
-		job.setOutputFormatClass(SequenceFileOutputFormat.class);
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
 		//job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
