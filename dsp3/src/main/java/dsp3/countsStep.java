@@ -16,17 +16,18 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.io.DoubleWritable;
+//import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.eclipse.jetty.util.ajax.JSON;
 
-import dsp3.countsStep.MapperClass;
-import dsp3.countsStep.ReducerClass;
+import com.google.gson.Gson;
 
 
-public class countsStep 
-{
+
+public class countsStep {
 
 	public static class MapperClass extends Mapper<LongWritable, Text, Text, Text>{
 		private Map<String, Map<String, Integer>> wordPairsMap = new HashMap<>();
@@ -144,8 +145,8 @@ public class countsStep
 
 	public static class ReducerClass extends Reducer<Text, Text, Text, MapWritable> {
 		private Text feature = new Text();
-		private IntWritable zero = new IntWritable(0);
-	
+		private DoubleWritable zero = new DoubleWritable(0);
+
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 			MapWritable featureSet = new MapWritable();
@@ -154,19 +155,41 @@ public class countsStep
 				// Parse the input value
 				String[] parts = val.toString().split(Env.DASH);
 				feature.set(parts[0] + Env.DASH + parts[1]);
-				IntWritable currentCount = new IntWritable(Integer.parseInt(parts[2]));
-	
+				DoubleWritable currentCount = new DoubleWritable(Double.parseDouble(parts[2]));
 				// Calculate the updated count
-				IntWritable existingCount = (IntWritable) featureSet.getOrDefault(feature, zero);
-				IntWritable updatedCount = new IntWritable(existingCount.get() + currentCount.get());
-	
+				DoubleWritable existingCount = (DoubleWritable) featureSet.getOrDefault(feature, zero);
+				DoubleWritable updatedCount = new DoubleWritable(existingCount.get() + currentCount.get());
 				// Update the featureSet with the new count
 				featureSet.put(new Text(feature), updatedCount);
 			}
-	
-			// Write the key and the updated featureSet to the context
-			context.write(key, featureSet);
+			if (key.toString().equals("Feature")) {
+				sendFeatureMapToSQS(Env.PROJECT_NAME +"-feature", convertMap(featureSet));
+			} else if (key.toString().equals("Lemmata")) {
+				sendFeatureMapToSQS(Env.PROJECT_NAME + "-lemmata", convertMap(featureSet));
+			} else {
+				context.write(key, featureSet);
+			}
 		}
+
+		public static void sendFeatureMapToSQS(String sqsQueueName, Map<String, Integer> featureMap) {
+			Gson gson = new Gson();
+			String json = gson.toJson(featureMap);	
+			// Use AWS instance to create the SQS queue (if it doesn't already exist)
+			AWS awsInstance = AWS.getInstance();
+			awsInstance.createSqsQueue(sqsQueueName);
+			// Send the JSON message to the SQS queue
+			awsInstance.sendSQSMessage(sqsQueueName, json);
+		}
+
+		private Map<String, Integer> convertMap(MapWritable value){
+            Map<String, Integer> valueMap = new HashMap<>();
+            for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
+                String featureKey = entry.getKey().toString();
+                Integer count = ((IntWritable) entry.getValue()).get();
+                valueMap.put(featureKey, count);
+            }
+            return valueMap;
+        }
 	}
 	
 	public static class PartitionerClass extends Partitioner<Text, Text> {
@@ -199,7 +222,7 @@ public class countsStep
 			}
 			Text val = new Text();
 			for (Writable featureKey : featureSet.keySet()) {
-				val.set((val.toString() + "::" + (Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
+				val.set(((Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
 				context.write(key, val);
 			}
 		}
@@ -212,7 +235,7 @@ public class countsStep
 		job.setJarByClass(countsStep.class);
 
 		job.setMapperClass(MapperClass.class);
-		job.setReducerClass(CombinerClass.class); //TODO 
+		job.setReducerClass(ReducerClass.class);
         job.setPartitionerClass(PartitionerClass.class);
 
 		job.setMapOutputKeyClass(Text.class);
@@ -222,7 +245,7 @@ public class countsStep
 		job.setOutputValueClass(Text.class);
 
 		job.setInputFormatClass(TextInputFormat.class);
-		job.setOutputFormatClass(TextOutputFormat.class);
+		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		//job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));

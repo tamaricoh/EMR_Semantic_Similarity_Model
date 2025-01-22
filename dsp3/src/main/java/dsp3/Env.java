@@ -34,6 +34,8 @@ public class Env {
 
     public static final String TEST_BUCKET_PATH = PROJECT_NAME +"-test";
     public static final String S3_BUCKET_PATH = "s3://" + PROJECT_NAME + "/";
+    public static final String FEATURE_SET_PATH =  S3_BUCKET_PATH + "feature-set";
+    public static final String LEMMATA_SET_PATH = S3_BUCKET_PATH + "lemmata-set";
     public static final String[] Steps_Names = {"step1"};
     public static final String[] Step_Output_Name = {"step1"};
 
