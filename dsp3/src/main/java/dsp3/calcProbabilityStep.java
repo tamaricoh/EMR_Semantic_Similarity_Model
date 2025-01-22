@@ -6,6 +6,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -31,23 +32,20 @@ import java.lang.reflect.Type;
 
 public class calcProbabilityStep {
 
-	public static class MapperClass extends Mapper<Text, MapWritable, Text, MapWritable>{
+	public static class MapperClass extends Mapper<Text, MapWritable, Text, TextMapWritable>{
 		private Map<String, Double> featureCounts;
         private Map<String, Double> lemmaCounts;
 		private Double F = 0.0;
 		private Double L = 0.0;
         private Text newKey = new Text();
-		private Map<String, Map<String, String>> wordPairsMap = new HashMap();
+		private TextMapWritable newVal;
+		private Map<String, Map<String, String>> wordPairsMap = new HashMap<String, Map<String, String>>();
 
 		protected void setup(Context context) throws IOException {
             featureCounts = parseJsonFromSQS(Env.PROJECT_NAME +"-feature");
             lemmaCounts = parseJsonFromSQS(Env.PROJECT_NAME +"-lemmata");
-			for (Double val : featureCounts.values()) {
-				F += val;
-			}
-			for (Double val : lemmaCounts.values()) {
-				L += val;
-			}
+			featureCounts.forEach( (feature, count) -> F += count);
+			lemmaCounts.forEach( (word, count) -> L += count);
 			processWordPairsFromS3(wordPairsMap);
 		}
 
@@ -118,12 +116,14 @@ public class calcProbabilityStep {
 													// w1,w2 meaning that w2 is second while w2,w1 means w2 is first
 				switch (relation) {
 					case "first":
-						newKey.set( w2 + " " + word + " " + "second");
-						context.write(newKey, newMap);
+						newKey.set(w2 + " " + word);
+						newVal = new TextMapWritable(new Text("second") , newMap);
+						context.write(newKey, newVal);
 						break;
 					case "second":
-						newKey.set( word + " " + w2 + " " + "first");
-						context.write(newKey, newMap);
+						newKey.set(word + " " + w2);
+						newVal = new TextMapWritable(new Text("first") , newMap);
+						context.write(newKey, newVal);
 						break;
 					default:
 						break;
@@ -146,12 +146,38 @@ public class calcProbabilityStep {
 
     }
 
-	public static class ReducerClass extends Reducer<Text, Text, Text, MapWritable> {
-		private Text feature = new Text();
-		private IntWritable zero = new IntWritable(0);
+	public static class ReducerClass extends Reducer<Text, TextMapWritable, Text, ArrayWritable> {
+		private Text newKey = new Text();
+		private ArrayWritable newValue = new ArrayWritable(DoubleWritable.class);
 	
 		@Override
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+		public void reduce(Text key, Iterable<TextMapWritable> values, Context context) throws IOException, InterruptedException {
+			HashMap<String, Double> w1Map;
+			HashMap<String, Double> w2Map;
+			for (TextMapWritable val : values) {
+				String position = val.getText().toString();
+				switch (position) {
+					case "first":
+						w1Map = convertMap(val.getMap());
+					break;
+					case "second":
+						w2Map = convertMap(val.getMap());
+					break;
+					default:
+						break;
+				}
+				
+			}
+        }
+
+		private HashMap<String, Double> convertMap(MapWritable value){
+            HashMap<String, Double> valueMap = new HashMap<>();
+            for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
+                String featureKey = entry.getKey().toString();
+                Double count = ((DoubleWritable) entry.getValue()).get();
+                valueMap.put(featureKey, count);
+            }
+            return valueMap;
         }
 	}
 	
@@ -170,6 +196,62 @@ public class calcProbabilityStep {
 	
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+		}
+	}
+
+	public static class TextMapWritable implements Writable {
+		private Text text;
+		private MapWritable map;
+	
+		// Default constructor (required by Hadoop)
+		public TextMapWritable() {
+			this.text = new Text();
+			this.map = new MapWritable();
+		}
+	
+		// Constructor to initialize fields
+		public TextMapWritable(Text text, MapWritable map) {
+			this.text = text;
+			this.map = map;
+		}
+	
+		// Getters and setters
+		public Text getText() {
+			return text;
+		}
+	
+		public void setText(Text text) {
+			this.text = text;
+		}
+	
+		public MapWritable getMap() {
+			return map;
+		}
+	
+		public void setMap(MapWritable map) {
+			this.map = map;
+		}
+	
+		// Serialize the object
+		@Override
+		public void write(DataOutput out) throws IOException {
+			text.write(out);
+			map.write(out);
+		}
+	
+		// Deserialize the object
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			text.readFields(in);
+			map.readFields(in);
+		}
+	
+		@Override
+		public String toString() {
+			return "TextMapWritable{" +
+					"text=" + text.toString() +
+					", map=" + map.toString() +
+					'}';
 		}
 	}
 
