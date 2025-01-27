@@ -15,57 +15,20 @@ import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
-import org.apache.hadoop.io.DoubleWritable;
+//import org.apache.hadoop.io.DoubleWritable;
 //import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.eclipse.jetty.util.ajax.JSON;
-
-import com.google.gson.Gson;
 
 
 
 public class countsStep {
 
 	public static class MapperClass extends Mapper<LongWritable, Text, Text, Text>{
-		private Map<String, Map<String, Integer>> wordPairsMap = new HashMap<>();
 		private Text newKey = new Text();
 		private Text newVal = new Text();
-		static AWS aws = AWS.getInstance();
-
-		protected void setup(Context context) throws IOException {
-			String localDir = "/tmp";
-			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
-
-			File directory = new File(localDir);
-			if (!directory.exists()) {
-				directory.mkdirs();
-			}
-
-			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey , localDir);
-
-			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
-			String line;
-
-			while ((line = reader.readLine()) != null) {
-				// Stemming
-				String[] parts = line.split("\t");
-				if (parts.length == 3) {
-					String w1 = parts[0].toLowerCase();
-					String w2 = parts[1].toLowerCase();
-					// boolean value = Boolean.parseBoolean(parts[2]);
-
-					wordPairsMap.putIfAbsent(w1, new HashMap<>());
-					wordPairsMap.get(w1).put(w2, 0);
-					wordPairsMap.putIfAbsent(w2, new HashMap<>());
-					wordPairsMap.get(w2).put(w1, 0);
-				}
-			}
-			reader.close();
-		}
-		
 
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -108,12 +71,13 @@ public class countsStep {
 						context.write(newKey, newVal);
 
 						// count(l,f)
-						newKey.set("count(l,f)" + Env.SPACE + word1.word + Env.SPACE + word2.word + Env.DASH + word2.dependencyLabel);
+						String f = word2.word + Env.DASH + word2.dependencyLabel;
+						newKey.set("count(l,f)" + Env.SPACE + word1.word + Env.SPACE + f);
 						newVal.set(count);
 						context.write(newKey, newVal);
 
 						// count(f)
-						newKey.set("count(f)" + Env.SPACE + word2.word + Env.DASH + word2.dependencyLabel);
+						newKey.set("count(f)" + Env.SPACE + f);
 						newVal.set(count + Env.SPACE +  word1.word);
 						context.write(newKey, newVal);
 
@@ -153,55 +117,99 @@ public class countsStep {
 		}  
 	}
 
-	public static class ReducerClass extends Reducer<Text, Text, Text, MapWritable> {
-		private Text feature = new Text();
-		private DoubleWritable zero = new DoubleWritable(0);
+	public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
+		private ArrayList<String> wordToCalculate = new ArrayList<String>();
+		private Text newKey = new Text();
+		private Text newVal = new Text();
+		static AWS aws = AWS.getInstance();
 
+		protected void setup(Context context) throws IOException {
+			String localDir = "/tmp";
+			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
+
+			File directory = new File(localDir);
+			if (!directory.exists()) {
+				directory.mkdirs();
+			}
+
+			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey , localDir);
+
+			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
+			String line;
+
+			while ((line = reader.readLine()) != null) {
+				// Stemming
+				String[] parts = line.split("\t");
+				if (parts.length == 3) {
+					String w1 = parts[0].toLowerCase();
+					String w2 = parts[1].toLowerCase();
+					wordToCalculate.add(w1);
+					wordToCalculate.add(w2);
+				}
+			}
+			reader.close();
+		}
+		
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			MapWritable featureSet = new MapWritable();
-	
+			String keyKind = key.toString().split(Env.SPACE)[0];
+			ArrayList<String> vals = toArray(values);
+
+			switch (keyKind){
+				case "count(F)":
+					aws.sendSQSMessage(Env.F, sum(vals));
+					break;
+				case "count(L)":
+					aws.sendSQSMessage(Env.L, sum(vals));
+					break;
+				case "count(l,f)":
+					newVal.set(sum(vals));
+					context.write(key, newVal);
+					break;
+				case "count(l)":
+					newVal.set(sum(vals));
+					context.write(key, newVal);
+					break;
+				case "count(f)":
+					ArrayList<String> relatedWords = filterFromInput(vals);
+					newVal.set(sum(vals));
+					String f = key.toString().split(Env.SPACE)[1];
+					for (String word : relatedWords) {
+						newKey.set("count(f)" + Env.SPACE + word + Env.SPACE + f);
+						context.write(newKey, key);
+					}
+					break;
+			}
+		}
+
+		private ArrayList<String> toArray(Iterable<Text> values){
+			ArrayList<String> output = new ArrayList<String>();
 			for (Text val : values) {
-				// Parse the input value
-				String[] parts = val.toString().split(Env.DASH);
-				feature.set(parts[0] + Env.DASH + parts[1]);
-				DoubleWritable currentCount = new DoubleWritable(Double.parseDouble(parts[2]));
-				// Calculate the updated count
-				DoubleWritable existingCount = (DoubleWritable) featureSet.getOrDefault(feature, zero);
-				DoubleWritable updatedCount = new DoubleWritable(existingCount.get() + currentCount.get());
-				// Update the featureSet with the new count
-				featureSet.put(new Text(feature), updatedCount);
+				output.add(val.toString());
 			}
-			if (key.toString().equals("Feature")) {
-				sendFeatureMapToSQS(Env.PROJECT_NAME +"-feature", convertMap(featureSet));
-			} else if (key.toString().equals("Lemmata")) {
-				sendFeatureMapToSQS(Env.PROJECT_NAME + "-lemmata", convertMap(featureSet));
-			} else {
-				context.write(key, featureSet);
-			}
+			return output;
 		}
 
-		public static void sendFeatureMapToSQS(String sqsQueueName, Map<String, Integer> featureMap) {
-			Gson gson = new Gson();
-			String json = gson.toJson(featureMap);	
-			// Use AWS instance to create the SQS queue (if it doesn't already exist)
-			AWS awsInstance = AWS.getInstance();
-			awsInstance.createSqsQueue(sqsQueueName);
-			// Send the JSON message to the SQS queue
-			awsInstance.sendSQSMessage(sqsQueueName, json);
+		private String sum(ArrayList<String> values){
+			Double sum = 0.0;
+			for (String val : values) {
+				sum += Double.parseDouble(val.split(Env.SPACE)[0]);
+			}
+
+			return String.valueOf(sum);	
 		}
 
-		private Map<String, Integer> convertMap(MapWritable value){
-            Map<String, Integer> valueMap = new HashMap<>();
-            for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
-                String featureKey = entry.getKey().toString();
-                Integer count = ((IntWritable) entry.getValue()).get();
-                valueMap.put(featureKey, count);
-            }
-            return valueMap;
-        }
+		private ArrayList<String> filterFromInput(ArrayList<String> values){
+			ArrayList<String> filter = new ArrayList<String>();
+			for (String val : values) {
+				String word = val.split(Env.SPACE)[1];
+				if(wordToCalculate.contains(word)){
+					filter.add(word);
+				}
+			}
+			return filter;
+		}
 	}
-	
 	public static class PartitionerClass extends Partitioner<Text, Text> {
         @Override
         public int getPartition(Text key, Text value, int numPartitions) {
