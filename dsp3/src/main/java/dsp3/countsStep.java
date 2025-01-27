@@ -84,13 +84,13 @@ public class countsStep {
 
 						// count(l,f)
 						String f = word2.word + Env.DASH + word2.dependencyLabel;
-						newKey.set("count(l,f)" + Env.SPACE + word1.word + Env.SPACE + f);
+						newKey.set("count(l,f)" + Env.space + word1.word + Env.space + f);
 						newVal.set(count);
 						context.write(newKey, newVal);
 
 						// count(f)
-						newKey.set("count(f)" + Env.SPACE + f);
-						newVal.set(count + Env.SPACE +  word1.word);
+						newKey.set("count(f)" + Env.space + f);
+						newVal.set(count + Env.space +  word1.word);
 						context.write(newKey, newVal);
 
 						relatedFeatures.add(f);
@@ -104,11 +104,11 @@ public class countsStep {
 
 					// count(l)
 					for (String relatedFeature : relatedFeatures){
-						newKey.set("count(l)" + Env.SPACE + word1.word); 
+						newKey.set("count(l)" + Env.space + word1.word); 
 						double countDouble = Double.parseDouble(count);
 						double result = countDouble / relatedFeatures.size();
 						String resultString = Double.toString(result);
-						newVal.set(resultString + Env.SPACE + relatedFeature);
+						newVal.set(resultString + Env.space + relatedFeature);
 						context.write(newKey, newVal);
 					}
 				}
@@ -143,6 +143,11 @@ public class countsStep {
 		
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			// for (Text value : values) {
+			// 	newKey.set(key);    // Set the key
+			// 	newVal.set(value);  // Set the corresponding value
+			// 	context.write(newKey, newVal); // Write the key-value pair to the output
+			// }
 			String[] parts = key.toString().split(Env.SPACE);
 			String keyKind = parts[0];
 			ArrayList<String> vals = toArray(values);
@@ -156,23 +161,23 @@ public class countsStep {
 					aws.sendSQSMessage(Env.L, sum(vals));
 					break;
 				case "count(l,f)":
-					newKey.set(parts[1] + Env.SPACE + parts[2]);
-					newVal.set(keyKind + Env.SPACE + sum(vals));
+					newKey.set(parts[1] + Env.space + parts[2]);
+					newVal.set(keyKind + Env.space + sum(vals));
 					context.write(newKey, newVal);
 					break;
 				case "count(l)":
-					newVal.set(keyKind + Env.SPACE + sum(vals));
+					newVal.set(keyKind + Env.space + sum(vals));
 					for (String val : vals){
 						String f = val.split(Env.SPACE)[1];
-						newKey.set(parts[1] + Env.SPACE + f);
+						newKey.set(parts[1] + Env.space + f);
 						context.write(newKey, newVal);
 					}
 					break;
 				case "count(f)":
-					newVal.set(keyKind + Env.SPACE + sum(vals));
+					newVal.set(keyKind + Env.space + sum(vals));
 					for (String val : vals){
 						String l = val.split(Env.SPACE)[1];
-						newKey.set(l + Env.SPACE + parts[2]);
+						newKey.set(l + Env.space + parts[1]);
 						context.write(newKey, newVal);
 					}
 					break;
@@ -203,35 +208,6 @@ public class countsStep {
         }
     }
 
-	public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
-		private Text feature = new Text();
-		private IntWritable zero = new IntWritable(0);
-	
-		@Override
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			MapWritable featureSet = new MapWritable();
-	
-			for (Text val : values) {
-				// Parse the input value
-				String[] parts = val.toString().split(Env.DASH);
-				feature.set(parts[0] + Env.DASH + parts[1]);
-				IntWritable currentCount = new IntWritable(Integer.parseInt(parts[2]));
-	
-				// Calculate the updated count
-				IntWritable existingCount = (IntWritable) featureSet.getOrDefault(feature, zero);
-				IntWritable updatedCount = new IntWritable(existingCount.get() + currentCount.get());
-	
-				// Update the featureSet with the new count
-				featureSet.put(new Text(feature), updatedCount);
-			}
-			Text val = new Text();
-			for (Writable featureKey : featureSet.keySet()) {
-				val.set(((Text) featureKey).toString() + Env.DASH + String.valueOf(featureSet.get(featureKey)));
-				context.write(key, val);
-			}
-		}
-	}
-
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
 		// conf.set("bucket_name", bucketName);
@@ -250,7 +226,7 @@ public class countsStep {
 
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
-		//job.setOutputFormatClass(TextOutputFormat.class);
+		// job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
 		FileOutputFormat.setOutputPath(job, new Path(args[2]));
