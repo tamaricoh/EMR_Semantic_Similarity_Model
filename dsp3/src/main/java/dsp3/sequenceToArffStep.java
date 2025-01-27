@@ -109,7 +109,7 @@ public class sequenceToArffStep { //TODO - check all paths!
             aws.uploadFileToS3(outputPath + "/word_similarity.arff", Env.PROJECT_NAME);
             
             String jarPath = Env.S3_BUCKET_PATH + "/WordSimilarityClassifier.jar";
-            ProcessBuilder pb = new ProcessBuilder("java", "-jar", jarPath, Env.S3_BUCKET_PATH);
+            ProcessBuilder pb = new ProcessBuilder("java", "-jar", jarPath, Env.S3_BUCKET_PATH); //TODO - args?
             Process process = pb.start();
             process.waitFor();
             System.exit(0);

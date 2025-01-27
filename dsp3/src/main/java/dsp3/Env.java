@@ -33,6 +33,8 @@ public class Env {
     // public static final String TERMINATE_JOB_FLOW_MESSAGE = "TERMINATE_JOB_FLOW";
 
     public static final String TEST_BUCKET_PATH = PROJECT_NAME +"-test";
+    public static final String F = "count(F)";
+    public static final String L = "count(L)";
     public static final String S3_BUCKET_PATH = "s3://" + PROJECT_NAME + "/";
     public static final String FEATURE_SET_PATH =  S3_BUCKET_PATH + "feature-set";
     public static final String LEMMATA_SET_PATH = S3_BUCKET_PATH + "lemmata-set";
