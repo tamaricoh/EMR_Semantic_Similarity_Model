@@ -21,6 +21,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.tartarus.snowball.ext.PorterStemmer;
 
 
 
@@ -41,20 +42,29 @@ public class countsStep {
 			
 			// Extract only the words and their positions from the dependency parse
 			List<WordPosition> words = new ArrayList<>();
+			PorterStemmer stemmer = new PorterStemmer(); // Create an instance of the stemmer
+
 			for (int i = 0; i < wordsInfo.length; i++) {
-				// utilize stemmer ======================================
 				String[] wordInfo = wordsInfo[i].split(Env.FORWARD_SLASH);
-				if (wordInfo.length >= 4){
-					String word = wordInfo[0].toLowerCase();
+				if (wordInfo.length >= 4) {
+					String originalWord = wordInfo[0].toLowerCase();
+					
+					// Apply the stemmer to the original word
+					stemmer.setCurrent(originalWord);
+					stemmer.stem();
+					String stemmedWord = stemmer.getCurrent(); // Get the stemmed word
+					
 					String dependencyLabel = wordInfo[1].toLowerCase();
 					int relatedTo = Integer.parseInt(wordInfo[3]);
-					int position = i+1;
-					words.add(new WordPosition(word, position, dependencyLabel, relatedTo));
-				}
-				else {
+					int position = i + 1;
+					
+					// Add the stemmed word instead of the original word
+					words.add(new WordPosition(stemmedWord, position, dependencyLabel, relatedTo));
+				} else {
 					System.err.println("[Tamar] Warning: Skipping malformed word info: " + wordsInfo[i]);
 				}
 			}
+
 			
 			// Sort words according to compareTo func
 			Collections.sort(words);
@@ -126,25 +136,38 @@ public class countsStep {
 		protected void setup(Context context) throws IOException {
 			String localDir = "/tmp";
 			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
-
+		
 			File directory = new File(localDir);
 			if (!directory.exists()) {
 				directory.mkdirs();
 			}
-
-			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey , localDir);
-
+		
+			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey, localDir);
+		
 			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
 			String line;
-
+		
+			// Initialize the Porter Stemmer
+			PorterStemmer stemmer = new PorterStemmer();
+		
 			while ((line = reader.readLine()) != null) {
-				// Stemming
 				String[] parts = line.split("\t");
 				if (parts.length == 3) {
 					String w1 = parts[0].toLowerCase();
 					String w2 = parts[1].toLowerCase();
-					wordToCalculate.add(w1);
-					wordToCalculate.add(w2);
+		
+					// Apply stemming to both words
+					stemmer.setCurrent(w1);
+					stemmer.stem();
+					String stemmedW1 = stemmer.getCurrent();
+		
+					stemmer.setCurrent(w2);
+					stemmer.stem();
+					String stemmedW2 = stemmer.getCurrent();
+		
+					// Add the stemmed words to the list
+					wordToCalculate.add(stemmedW1);
+					wordToCalculate.add(stemmedW2);
 				}
 			}
 			reader.close();
