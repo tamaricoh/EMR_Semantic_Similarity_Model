@@ -72,6 +72,8 @@ public class countsStep {
 
 			String[] parts = value.toString().split(Env.TAB);
 
+			String count = parts[2];
+			
 			String[] wordsInfo = parts[1].toString().split(Env.SPACE);
 			
 			// Extract only the words and their positions from the dependency parse
@@ -96,28 +98,36 @@ public class countsStep {
 			
 			for (int i = 0; i < words.size(); i++) {
 				WordPosition word1 = words.get(i);
-				
-				if (wordPairsMap.containsKey(word1.word)) {
-					for (int j = 0; j < words.size(); j++) {
-						WordPosition word2 = words.get(j);
-						
-						if (word1.position == word2.relatedTo && wordPairsMap.get(word1.word).containsKey(word2.word)) {
+				for (int j = 0; j < words.size(); j++) {
+					WordPosition word2 = words.get(j);
+					
+					if (word1.position == word2.relatedTo) {
+						// count(F)
+						newKey.set("count(F)");
+						newVal.set(count);
+						context.write(newKey, newVal);
 
-							// Random Variable F
-							newKey.set("Feature"); // Uppercase letter to diffrentiate from word in corpus.
-							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
-							context.write(newKey, newVal);
+						// count(l,f)
+						newKey.set("count(l,f)" + Env.SPACE + word1.word + Env.SPACE + word2.word + Env.DASH + word2.dependencyLabel);
+						newVal.set(count);
+						context.write(newKey, newVal);
 
-							// Random Variable F,L
-							newKey.set(word1.word);
-							newVal.set(word2.word + Env.DASH + word2.dependencyLabel + Env.DASH + parts[2]);
-							context.write(newKey, newVal);
-						}
+						// count(f)
+						newKey.set("count(f)" + Env.SPACE + word2.word + Env.DASH + word2.dependencyLabel);
+						newVal.set(count + Env.SPACE +  word1.word);
+						context.write(newKey, newVal);
+
 					}
-					// Random Variable L
-					newKey.set("Lemmata"); // Uppercase letter to diffrentiate from word in corpus.
-					newVal.set(word1.word + Env.DASH + Env.DASH + parts[2]);
-					context.write(newKey, newVal);
+				// count(L)
+				newKey.set("count(L)");
+				newVal.set(count);
+				context.write(newKey, newVal);
+
+				// count(l)
+				newKey.set("count(l)" + Env.SPACE + word1.word); 
+				newVal.set(count);
+				context.write(newKey, newVal);
+
 				}
 			}
 		}
