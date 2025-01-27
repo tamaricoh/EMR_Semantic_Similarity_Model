@@ -32,153 +32,82 @@ import java.lang.reflect.Type;
 
 public class calcProbabilityStep {
 
-	public static class MapperClass extends Mapper<Text, MapWritable, Text, TextMapWritable>{
-		private Map<String, Double> featureCounts;
-        private Map<String, Double> lemmaCounts;
-		private Double F = 0.0;
-		private Double L = 0.0;
-        private Text newKey = new Text();
-		private TextMapWritable newVal;
-		private Map<String, Map<String, String>> wordPairsMap = new HashMap<String, Map<String, String>>();
+	public static class MapperClass extends Mapper<Text, Text, Text, Text>{
+		private ArrayList<String> wordsToCalculate = new ArrayList<String>();
+		static AWS aws = AWS.getInstance();
 
 		protected void setup(Context context) throws IOException {
-            featureCounts = parseJsonFromSQS(Env.PROJECT_NAME +"-feature");
-            lemmaCounts = parseJsonFromSQS(Env.PROJECT_NAME +"-lemmata");
-			featureCounts.forEach( (feature, count) -> F += count);
-			lemmaCounts.forEach( (word, count) -> L += count);
-			processWordPairsFromS3(wordPairsMap);
-		}
-
-        private static HashMap<String, Double> parseJsonFromSQS(String SQS_name) {
-            Gson gson = new Gson();
-            String featureSet = AWS.getInstance().checkSQSQueue(SQS_name);
-            Type type = new TypeToken<HashMap<String, Object>>() {}.getType();
-            return gson.fromJson(featureSet, type);
-        }
-
-		public static void processWordPairsFromS3(Map<String, Map<String, String>> wordPairsMap) throws IOException {
 			String localDir = "/tmp";
 			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
-	
-			// Ensure local directory exists
+
 			File directory = new File(localDir);
 			if (!directory.exists()) {
 				directory.mkdirs();
 			}
-	
-			// Download the file from S3
-			AWS.getInstance().downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey, localDir);
-	
-			// Read the file and populate the map
-			try (BufferedReader reader = new BufferedReader(new FileReader(localFilePath))) {
-				String line;
-	
-				while ((line = reader.readLine()) != null) {
-					// Process each line
-					String[] parts = line.split("\t");
-					if (parts.length == 3) {
-						String w1 = parts[0].toLowerCase();
-						String w2 = parts[1].toLowerCase();
-	
-						// Add the word pair to the map
-						wordPairsMap.putIfAbsent(w1, new HashMap<>());
-						wordPairsMap.get(w1).put(w2, "second");
-	
-						wordPairsMap.putIfAbsent(w2, new HashMap<>());
-						wordPairsMap.get(w2).put(w1, "first");
-					}
+
+			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey , localDir);
+
+			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
+			String line;
+
+			while ((line = reader.readLine()) != null) {
+				// Stemming
+				String[] parts = line.split("\t");
+				if (parts.length == 3) {
+					String w1 = parts[0].toLowerCase();
+					String w2 = parts[1].toLowerCase();
+					wordsToCalculate.add(w1);
+					wordsToCalculate.add(w2);
 				}
 			}
+			reader.close();
 		}
-		
+
 		@Override
-		public void map(Text key, MapWritable value, Context context) throws IOException, InterruptedException {
-            HashMap<String, Double> map = convertMap(value);
-			MapWritable newMap = new MapWritable();
-			String word = key.toString();
-			Double l = lemmaCounts.get(word);
-			map.forEach((feature, count) -> {						//TODO: solve dividing by zero and log of zero 
-				Double f = featureCounts.get(feature);
-				ArrayList<DoubleWritable> equations = new ArrayList<DoubleWritable>();
-				equations.add(new DoubleWritable(count));									 //N5 : assoc_freq(l,f) = Count(F=f,L=l)
-				equations.add(new DoubleWritable(count/l));									 //N6 : assoc_prob(l,f) = P(F=f|L=l) = Count(F=f,L=l)/Count(L=l)
-				equations.add(new DoubleWritable(Math.log((count/L) / (l/L)*(f/F))));		 //N7 : assoc_PMI(l,f) = log2(P(F=f,L=l)/(P(L=l)*P(F=f)))
-				equations.add(new DoubleWritable(((count/L) - (l/L)*(f/F) / Math.sqrt(0)))); //N8 : assoc_t-test(l,f) = (P(F=f,L=l) - P(L=l)*P(F=f))/sqrt(P(L=l)*P(F=f))
-				ArrayWritable WriteableArray = new ArrayWritable(DoubleWritable.class);
-				WriteableArray.set(equations.toArray(new DoubleWritable[0]));
-				newMap.put(new Text(feature), WriteableArray);
-			});
-
-			// Iterate over all associated w2 keys and process them
-			for (Map.Entry<String, String> entry : wordPairsMap.get(word).entrySet()) {
-				String w2 = entry.getKey();
-				String relation = entry.getValue(); // "first" or "second" the relation between w1, w2
-													// w1,w2 meaning that w2 is second while w2,w1 means w2 is first
-				switch (relation) {
-					case "first":
-						newKey.set(w2 + " " + word);
-						newVal = new TextMapWritable(new Text("second") , newMap);
-						context.write(newKey, newVal);
-						break;
-					case "second":
-						newKey.set(word + " " + w2);
-						newVal = new TextMapWritable(new Text("first") , newMap);
-						context.write(newKey, newVal);
-						break;
-					default:
-						break;
-				}
-
-
+		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
+			String word = key.toString().split(Env.SPACE)[0];
+			if(wordsToCalculate.contains(word)){
+				context.write(key, value);
 			}
-
         }
 
-        private HashMap<String, Double> convertMap(MapWritable value){
-            HashMap<String, Double> valueMap = new HashMap<>();
-            for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
-                String featureKey = entry.getKey().toString();
-                Double count = ((DoubleWritable) entry.getValue()).get();
-                valueMap.put(featureKey, count);
-            }
-            return valueMap;
-        }
 
     }
 
-	public static class ReducerClass extends Reducer<Text, TextMapWritable, Text, ArrayWritable> {
+	public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
+		private Double F = 0.0;
+		private Double L = 0.0;
 		private Text newKey = new Text();
-		private ArrayWritable newValue = new ArrayWritable(DoubleWritable.class);
+		private Text newValue = new Text();
+
+		protected void setup(Context context) throws IOException {
+            F = parseCountFromSQS(Env.F);
+			L = parseCountFromSQS(Env.L);
+		}
+
+        private static Double parseCountFromSQS(String SQS_name) {
+            String count = AWS.getInstance().checkSQSQueue(SQS_name);
+            return Double.parseDouble(count);
+        }
 	
 		@Override
-		public void reduce(Text key, Iterable<TextMapWritable> values, Context context) throws IOException, InterruptedException {
-			HashMap<String, Double> w1Map;
-			HashMap<String, Double> w2Map;
-			for (TextMapWritable val : values) {
-				String position = val.getText().toString();
-				switch (position) {
-					case "first":
-						w1Map = convertMap(val.getMap());
-					break;
-					case "second":
-						w2Map = convertMap(val.getMap());
-					break;
-					default:
-						break;
-				}
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			ArrayList<String> counts = toMap(values);
+			Double count_f =
+			Double count_l
+			Double count_l_f
 				
-			}
-        }
+		}
 
-		private HashMap<String, Double> convertMap(MapWritable value){
-            HashMap<String, Double> valueMap = new HashMap<>();
-            for (Map.Entry<Writable, Writable> entry : value.entrySet()) {
-                String featureKey = entry.getKey().toString();
-                Double count = ((DoubleWritable) entry.getValue()).get();
-                valueMap.put(featureKey, count);
-            }
-            return valueMap;
-        }
+		private ArrayList<String> toArray(Iterable<Text> values){
+			HashMap<String, Double> output = new HashMap<>();
+			for (Text val : values) {
+				String[] parts = val.toString().split(Env.SPACE);
+				output.put(parts[0], Double.parseDouble(parts[1]));
+			}
+			return output;
+		}
+
 	}
 	
 	public static class PartitionerClass extends Partitioner<Text, Text> {
