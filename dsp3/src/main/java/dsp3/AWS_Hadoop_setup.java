@@ -13,7 +13,9 @@ public class AWS_Hadoop_setup {
     public static void main(String[] args) {
         aws.createBucketIfNotExists(Env.PROJECT_NAME);
         aws.createBucketIfNotExists(Env.TEST_BUCKET_PATH);
-        // aws.createSqsQueue(Env.C0_SQS);
+        aws.createSqsQueue(Env.F);
+        aws.createSqsQueue(Env.L);
+
         aws.uploadFileToS3(Env.corpusTest ,Env.TEST_BUCKET_PATH);
         aws.uploadFileToS3(Env.wordRelatednessFile, Env.PROJECT_NAME);
         //aws.uploadFileToS3(Env.testingFiles[0], Env.PROJECT_NAME); 

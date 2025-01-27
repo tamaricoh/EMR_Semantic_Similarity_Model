@@ -7,7 +7,7 @@ import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSource;
 import java.util.Random;
 
-public class WordSimilarityClassifier {
+public class wordSimilarityClassifier {
 
     public static Instances loadArffFromS3(String fileKey, String localPath) throws Exception {
         AWS aws = AWS.getInstance();
@@ -31,7 +31,7 @@ public class WordSimilarityClassifier {
             Instances train = new Instances(data, 0, trainSize);
             Instances test = new Instances(data, trainSize, testSize);
             
-            // Create and train the classifier (using Random Forest as an example)
+            // Create and train the classifier
             Classifier classifier = new RandomForest();
             classifier.buildClassifier(train);
             
