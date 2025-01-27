@@ -6,7 +6,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -16,17 +15,9 @@ import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
-import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.codehaus.jackson.util.TextBuffer;
-import org.apache.hadoop.io.ArrayWritable;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
+import org.tartarus.snowball.ext.PorterStemmer;
 
 
 
@@ -49,15 +40,18 @@ public class calcProbabilityStep {
 
 			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
 			String line;
-
+			PorterStemmer stemmer = new PorterStemmer();
 			while ((line = reader.readLine()) != null) {
-				// Stemming
 				String[] parts = line.split("\t");
 				if (parts.length == 3) {
 					String w1 = parts[0].toLowerCase();
 					String w2 = parts[1].toLowerCase();
-					wordsToCalculate.add(w1);
-					wordsToCalculate.add(w2);
+					stemmer.setCurrent(w1);
+					stemmer.stem();
+					wordsToCalculate.add(stemmer.getCurrent());
+					stemmer.setCurrent(w2);
+					stemmer.stem();
+					wordsToCalculate.add(stemmer.getCurrent());
 				}
 			}
 			reader.close();
@@ -92,20 +86,46 @@ public class calcProbabilityStep {
 	
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			ArrayList<String> counts = toMap(values);
-			Double count_f =
-			Double count_l
-			Double count_l_f
+			Double[] counts = new Double[3]; // countf countl countlf
+			Double count_l = 0.0;
+			Double count_l_f = 0.0;
+			for (Text val : values) {
+				String[] parts = val.toString().split(Env.SPACE);
+				switch (parts[0]) {
+					case "count(l,f)":
+						counts[2] = Double.parseDouble(parts[1]);
+						break;
+					case "count(l)":
+						counts[1] = Double.parseDouble(parts[1]);
+						break;
+					case "count(f)":
+						counts[0] = Double.parseDouble(parts[1]);
+						break;
+				}
+				Double[] measures = getMeasures(counts);
+				String[] word_feature = key.toString().split(Env.SPACE);
+				newKey.set(word_feature[0]);
+				newValue.set(
+					word_feature[1] + " " + 
+					String.valueOf(measures[0]) + " " +
+					String.valueOf(measures[1]) + " " +
+					String.valueOf(measures[2]) + " " +
+					String.valueOf(measures[3]) + " "	);
+			}
 				
 		}
 
-		private ArrayList<String> toArray(Iterable<Text> values){
-			HashMap<String, Double> output = new HashMap<>();
-			for (Text val : values) {
-				String[] parts = val.toString().split(Env.SPACE);
-				output.put(parts[0], Double.parseDouble(parts[1]));
-			}
-			return output;
+		private Double[] getMeasures(Double[] counts){
+			Double[] measures = new Double[4];
+			measures[0] = counts[2];
+			measures[1] = counts[2]/counts[1];
+			Double a = counts[2]/F;
+			Double b = counts[1]/L*counts[0]/F;
+
+			measures[2] = Math.log(a/b);
+			measures[3] = (a-b)/Math.sqrt(b);
+			return measures;
+			
 		}
 
 	}
@@ -118,15 +138,6 @@ public class calcProbabilityStep {
             return (numPartitions == 0) ? 0 : Math.abs(wordPair.hashCode() % numPartitions);
         }
     }
-
-	public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
-		private Text feature = new Text();
-		private IntWritable zero = new IntWritable(0);
-	
-		@Override
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-		}
-	}
 
 	public static class TextMapWritable implements Writable {
 		private Text text;
