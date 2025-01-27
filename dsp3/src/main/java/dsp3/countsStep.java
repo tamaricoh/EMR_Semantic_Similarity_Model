@@ -15,6 +15,7 @@ import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
+import org.apache.hadoop.io.DoubleWritable;
 //import org.apache.hadoop.io.DoubleWritable;
 //import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -68,7 +69,8 @@ public class countsStep {
 			
 			// Sort words according to compareTo func
 			Collections.sort(words);
-			
+			List<String> relatedFeatures = new ArrayList<>();
+
 			for (int i = 0; i < words.size(); i++) {
 				WordPosition word1 = words.get(i);
 				for (int j = 0; j < words.size(); j++) {
@@ -91,17 +93,24 @@ public class countsStep {
 						newVal.set(count + Env.SPACE +  word1.word);
 						context.write(newKey, newVal);
 
+						relatedFeatures.add(f);
+
 					}
-				// count(L)
-				newKey.set("count(L)");
-				newVal.set(count);
-				context.write(newKey, newVal);
 
-				// count(l)
-				newKey.set("count(l)" + Env.SPACE + word1.word); 
-				newVal.set(count);
-				context.write(newKey, newVal);
+					// count(L)
+					newKey.set("count(L)");
+					newVal.set(count);
+					context.write(newKey, newVal);
 
+					// count(l)
+					for (String relatedFeature : relatedFeatures){
+						newKey.set("count(l)" + Env.SPACE + word1.word); 
+						double countDouble = Double.parseDouble(count);
+						double result = countDouble / relatedFeatures.size();
+						String resultString = Double.toString(result);
+						newVal.set(resultString + Env.SPACE + relatedFeature);
+						context.write(newKey, newVal);
+					}
 				}
 			}
 		}
@@ -128,55 +137,16 @@ public class countsStep {
 	}
 
 	public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-		private ArrayList<String> wordToCalculate = new ArrayList<String>();
 		private Text newKey = new Text();
 		private Text newVal = new Text();
 		static AWS aws = AWS.getInstance();
-
-		protected void setup(Context context) throws IOException {
-			String localDir = "/tmp";
-			String localFilePath = localDir + "/" + Env.wordRelatednessKey;
-		
-			File directory = new File(localDir);
-			if (!directory.exists()) {
-				directory.mkdirs();
-			}
-		
-			aws.downloadFromS3(Env.PROJECT_NAME, Env.wordRelatednessKey, localDir);
-		
-			BufferedReader reader = new BufferedReader(new FileReader(localFilePath));
-			String line;
-		
-			// Initialize the Porter Stemmer
-			PorterStemmer stemmer = new PorterStemmer();
-		
-			while ((line = reader.readLine()) != null) {
-				String[] parts = line.split("\t");
-				if (parts.length == 3) {
-					String w1 = parts[0].toLowerCase();
-					String w2 = parts[1].toLowerCase();
-		
-					// Apply stemming to both words
-					stemmer.setCurrent(w1);
-					stemmer.stem();
-					String stemmedW1 = stemmer.getCurrent();
-		
-					stemmer.setCurrent(w2);
-					stemmer.stem();
-					String stemmedW2 = stemmer.getCurrent();
-		
-					// Add the stemmed words to the list
-					wordToCalculate.add(stemmedW1);
-					wordToCalculate.add(stemmedW2);
-				}
-			}
-			reader.close();
-		}
 		
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			String keyKind = key.toString().split(Env.SPACE)[0];
+			String[] parts = key.toString().split(Env.SPACE);
+			String keyKind = parts[0];
 			ArrayList<String> vals = toArray(values);
+			
 
 			switch (keyKind){
 				case "count(F)":
@@ -186,20 +156,24 @@ public class countsStep {
 					aws.sendSQSMessage(Env.L, sum(vals));
 					break;
 				case "count(l,f)":
-					newVal.set(sum(vals));
-					context.write(key, newVal);
+					newKey.set(parts[1] + Env.SPACE + parts[2]);
+					newVal.set(keyKind + Env.SPACE + sum(vals));
+					context.write(newKey, newVal);
 					break;
 				case "count(l)":
-					newVal.set(sum(vals));
-					context.write(key, newVal);
+					newVal.set(keyKind + Env.SPACE + sum(vals));
+					for (String val : vals){
+						String f = val.split(Env.SPACE)[1];
+						newKey.set(parts[1] + Env.SPACE + f);
+						context.write(newKey, newVal);
+					}
 					break;
 				case "count(f)":
-					ArrayList<String> relatedWords = filterFromInput(vals);
-					newVal.set(sum(vals));
-					String f = key.toString().split(Env.SPACE)[1];
-					for (String word : relatedWords) {
-						newKey.set("count(f)" + Env.SPACE + word + Env.SPACE + f);
-						context.write(newKey, key);
+					newVal.set(keyKind + Env.SPACE + sum(vals));
+					for (String val : vals){
+						String l = val.split(Env.SPACE)[1];
+						newKey.set(l + Env.SPACE + parts[2]);
+						context.write(newKey, newVal);
 					}
 					break;
 			}
@@ -220,17 +194,6 @@ public class countsStep {
 			}
 
 			return String.valueOf(sum);	
-		}
-
-		private ArrayList<String> filterFromInput(ArrayList<String> values){
-			ArrayList<String> filter = new ArrayList<String>();
-			for (String val : values) {
-				String word = val.split(Env.SPACE)[1];
-				if(wordToCalculate.contains(word)){
-					filter.add(word);
-				}
-			}
-			return filter;
 		}
 	}
 	public static class PartitionerClass extends Partitioner<Text, Text> {
