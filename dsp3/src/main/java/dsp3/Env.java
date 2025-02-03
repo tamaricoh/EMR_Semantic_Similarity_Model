@@ -9,6 +9,7 @@ public class Env {
     public static final String space = " "; 
     public static final String FORWARD_SLASH = "/";
     public static final String DASH = "-";
+    public static final String inputBucket = "Ngram";
 
     //to run change these:
     public static String wordRelatednessFile = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\src\\main\\java\\dsp3\\resources\\word-relatedness.txt";
@@ -39,8 +40,8 @@ public class Env {
     public static final String S3_BUCKET_PATH = "s3://" + PROJECT_NAME + "/";
     public static final String FEATURE_SET_PATH =  S3_BUCKET_PATH + "feature-set";
     public static final String LEMMATA_SET_PATH = S3_BUCKET_PATH + "lemmata-set";
-    public static final String[] Steps_Names = {"step1"};
-    public static final String[] Step_Output_Name = {"step1"};
+    public static final String[] Steps_Names = {"step1", "step2", "step3"};
+    public static final String[] Step_Output_Name = {"step1", "step2", "step3"};
 
     public static String getStepJarPath(int i){
         return  getPathS3(Steps_Names[i], ".jar");
@@ -53,23 +54,22 @@ public class Env {
         switch (stepNum){
             case 0:
                 args = new String[]{ 
-                    "s3://" + TEST_BUCKET_PATH + "/" + "test.txt",
+                    "s3://" + TEST_BUCKET_PATH + "/" + "test.txt", //TODO -change to correct input
                     "s3://" + PROJECT_NAME + "/" + Step_Output_Name[0]
                 };
-                System.out.println("[DEBUG]  step output name: " + Step_Output_Name[0]);
                 break;
-            // case 1:
-            //     args = new String[]{
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[0], // input
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[1] // output
-            //     };
-            //     break;
-            // case 2:
-            //     args = new String[]{
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[1], // input
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[2] // output
-            //     };
-            //     break;
+            case 1:
+                args = new String[]{
+                    "s3://" + PROJECT_NAME + "/" + Step_Output_Name[0], // input
+                    "s3://" + PROJECT_NAME + "/" + Step_Output_Name[1] // output
+                };
+                break;
+            case 2:
+                args = new String[]{
+                    "s3://" + PROJECT_NAME + "/" + Step_Output_Name[1], // input
+                    "s3://" + PROJECT_NAME + "/" + Step_Output_Name[2] // output
+                };
+                break;
             // case 3:
             //     args = new String[]{
             //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[2], // input
