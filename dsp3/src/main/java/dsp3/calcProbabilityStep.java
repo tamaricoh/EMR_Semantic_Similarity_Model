@@ -102,16 +102,18 @@ public class calcProbabilityStep {
 						counts[0] = Double.parseDouble(parts[1]);
 						break;
 				}
-				Double[] measures = getMeasures(counts);
-				String[] word_feature = key.toString().split(Env.SPACE);
-				newKey.set(word_feature[0]);
-				newValue.set(
-					word_feature[1] + " " + 
-					String.valueOf(measures[0]) + " " +
-					String.valueOf(measures[1]) + " " +
-					String.valueOf(measures[2]) + " " +
-					String.valueOf(measures[3]) + " "	);
 			}
+			Double[] measures = getMeasures(counts);
+			String[] word_feature = key.toString().split(Env.SPACE);
+			newKey.set(word_feature[0]);
+			newValue.set(
+						word_feature[1] + " " + 
+						String.valueOf(measures[0]) + " " +
+						String.valueOf(measures[1]) + " " +
+						String.valueOf(measures[2]) + " " +
+						String.valueOf(measures[3])
+						);
+			context.write(newKey, newValue);
 				
 		}
 
@@ -212,7 +214,7 @@ public class calcProbabilityStep {
 		job.setOutputValueClass(Text.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
-		job.setOutputFormatClass(TextOutputFormat.class);
+		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		//job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
