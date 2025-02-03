@@ -86,25 +86,37 @@ public class calcProbabilityStep {
 	
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			Double[] counts = new Double[3]; // countf countl countlf
+			Double[] counts = new Double[]{0.0, 0.0, 0.0}; // countf countl countlf
 			Double count_l = 0.0;
 			Double count_l_f = 0.0;
 			for (Text val : values) {
 				String[] parts = val.toString().split(Env.SPACE);
-				switch (parts[0]) {
-					case "count(l,f)":
-						counts[2] = Double.parseDouble(parts[1]);
-						break;
-					case "count(l)":
-						counts[1] = Double.parseDouble(parts[1]);
-						break;
-					case "count(f)":
-						counts[0] = Double.parseDouble(parts[1]);
-						break;
+				if (parts.length < 2) {
+					System.err.println("Invalid input format: " + val.toString());
+					continue; 
+				}
+				try {
+					double value = Double.parseDouble(parts[1]);
+					switch (parts[0]) {
+						case "count(l,f)":
+							counts[2] = value;
+							break;
+						case "count(l)":
+							counts[1] = value;
+							break;
+						case "count(f)":
+							counts[0] = value;
+							break;
+						default:
+							System.err.println("Unexpected key: " + parts[0]);
+					}
+				} catch (NumberFormatException e) {
+					System.err.println("Invalid number format: " + parts[1]);
 				}
 			}
 			Double[] measures = getMeasures(counts);
 			String[] word_feature = key.toString().split(Env.SPACE);
+
 			newKey.set(word_feature[0]);
 			newValue.set(
 						word_feature[1] + " " + 
@@ -114,7 +126,6 @@ public class calcProbabilityStep {
 						String.valueOf(measures[3])
 						);
 			context.write(newKey, newValue);
-				
 		}
 
 		private Double[] getMeasures(Double[] counts){
@@ -141,62 +152,6 @@ public class calcProbabilityStep {
         }
     }
 
-	public static class TextMapWritable implements Writable {
-		private Text text;
-		private MapWritable map;
-	
-		// Default constructor (required by Hadoop)
-		public TextMapWritable() {
-			this.text = new Text();
-			this.map = new MapWritable();
-		}
-	
-		// Constructor to initialize fields
-		public TextMapWritable(Text text, MapWritable map) {
-			this.text = text;
-			this.map = map;
-		}
-	
-		// Getters and setters
-		public Text getText() {
-			return text;
-		}
-	
-		public void setText(Text text) {
-			this.text = text;
-		}
-	
-		public MapWritable getMap() {
-			return map;
-		}
-	
-		public void setMap(MapWritable map) {
-			this.map = map;
-		}
-	
-		// Serialize the object
-		@Override
-		public void write(DataOutput out) throws IOException {
-			text.write(out);
-			map.write(out);
-		}
-	
-		// Deserialize the object
-		@Override
-		public void readFields(DataInput in) throws IOException {
-			text.readFields(in);
-			map.readFields(in);
-		}
-	
-		@Override
-		public String toString() {
-			return "TextMapWritable{" +
-					"text=" + text.toString() +
-					", map=" + map.toString() +
-					'}';
-		}
-	}
-
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
 		// conf.set("bucket_name", bucketName);
@@ -215,7 +170,7 @@ public class calcProbabilityStep {
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
-		//job.setOutputFormatClass(TextOutputFormat.class);
+		// job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
 		FileOutputFormat.setOutputPath(job, new Path(args[2]));

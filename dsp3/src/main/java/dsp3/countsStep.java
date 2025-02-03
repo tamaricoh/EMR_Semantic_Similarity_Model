@@ -73,6 +73,7 @@ public class countsStep {
 
 			for (int i = 0; i < words.size(); i++) {
 				WordPosition word1 = words.get(i);
+				relatedFeatures.clear();
 				for (int j = 0; j < words.size(); j++) {
 					WordPosition word2 = words.get(j);
 					
@@ -97,20 +98,20 @@ public class countsStep {
 
 					}
 
-					// count(L)
-					newKey.set("count(L)");
-					newVal.set(count);
-					context.write(newKey, newVal);
+				}
+				// count(L)
+				newKey.set("count(L)");
+				newVal.set(count);
+				context.write(newKey, newVal);
 
-					// count(l)
-					for (String relatedFeature : relatedFeatures){
-						newKey.set("count(l)" + Env.space + word1.word); 
-						double countDouble = Double.parseDouble(count);
-						double result = countDouble / relatedFeatures.size();
-						String resultString = Double.toString(result);
-						newVal.set(resultString + Env.space + relatedFeature);
-						context.write(newKey, newVal);
-					}
+				// count(l)
+				for (String relatedFeature : relatedFeatures){
+					newKey.set("count(l)" + Env.space + word1.word); 
+					double countDouble = Double.parseDouble(count);
+					double result = countDouble / relatedFeatures.size();
+					String resultString = Double.toString(result);
+					newVal.set(resultString + Env.space + relatedFeature);
+					context.write(newKey, newVal);
 				}
 			}
 		}

@@ -126,7 +126,7 @@ public class calcWordsVectors {
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 			String[] words = key.toString().split(Env.SPACE);
             String first = words[0];
-            String second = words[0];
+            String second = words[1];
             HashMap<String, Double[]> l1Feature = new HashMap<>();
             HashMap<String, Double[]> l2Feature = new HashMap<>();
             HashMap<String, String> features = new HashMap<>();
@@ -165,12 +165,11 @@ public class calcWordsVectors {
 		}
 
         private String arrayToString (Double[] arr){
-            String result = "";
-            for(int i = 0; i<arr.length ; i++){
-                result.concat(String.valueOf(arr[i]));
-                result.concat(Env.space);
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < arr.length; i++) {
+                result.append(arr[i]).append(Env.space);
             }
-            return result;
+            return result.toString();
         }
 
         // Example methods for calculations
@@ -347,8 +346,8 @@ public class calcWordsVectors {
 		job.setOutputValueClass(Text.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
-		job.setOutputFormatClass(SequenceFileOutputFormat.class);
-		//job.setOutputFormatClass(TextOutputFormat.class);
+		// job.setOutputFormatClass(SequenceFileOutputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
 		FileOutputFormat.setOutputPath(job, new Path(args[2]));
