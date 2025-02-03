@@ -12,6 +12,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -105,12 +106,12 @@ public class calcWordsVectors {
 
 		@Override
 		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
-			String word = key.toString();
+			String word = key.toString();           //oldkey: w       oldVal: feature p1 p2 p3 p4
 			ArrayList<wordPairs> relatedPairs = wordPairs.filterByWord(word, wordspairs);
-            newVal.set(word + Env.space + key.toString());
+            newVal.set(word + Env.space + value.toString());
             for (wordPairs pair : relatedPairs) {
                 newKey.set(pair.getFirst() + Env.space + pair.getSecond());
-                context.write(newKey, newVal);
+                context.write(newKey, newVal);      // key: w1 w2      val: w feature p1 p2 p3 p4
             }
         }
 
@@ -157,11 +158,20 @@ public class calcWordsVectors {
                 i += 6;
             }
 
-            //decide on how to proceed...
-            
+            newValue.set(arrayToString(calcResult));
+            context.write(key, newValue);
 
 
 		}
+
+        private String arrayToString (Double[] arr){
+            String result = "";
+            for(int i = 0; i<arr.length ; i++){
+                result.concat(String.valueOf(arr[i]));
+                result.concat(Env.space);
+            }
+            return result;
+        }
 
         // Example methods for calculations
         //Equation 9
@@ -324,7 +334,7 @@ public class calcWordsVectors {
 		Configuration conf = new Configuration();
 		// conf.set("bucket_name", bucketName);
 		Job job = Job.getInstance(conf, args[0]);
-		job.setJarByClass(countsStep.class);
+		job.setJarByClass(calcWordsVectors.class);
 
 		job.setMapperClass(MapperClass.class);
 		job.setReducerClass(ReducerClass.class);
@@ -337,7 +347,7 @@ public class calcWordsVectors {
 		job.setOutputValueClass(Text.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
-		job.setOutputFormatClass(TextOutputFormat.class);
+		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		//job.setOutputFormatClass(TextOutputFormat.class);
 
 		FileInputFormat.addInputPath(job, new Path(args[1]));
