@@ -32,21 +32,26 @@ public class calcWordsVectors {
     public static class wordPairs {
         String w1;
         String w2;
+        String label;
     
         // Constructor
-        public wordPairs(String w1, String w2) {
+        public wordPairs(String w1, String w2, String label) {
             this.w1 = w1;
             this.w2 = w2;
+            this.label = label;
         }
     
-        // Method to get the first word
+        // Getters
         public String getFirst() {
             return this.w1;
         }
     
-        // Method to get the second word
         public String getSecond() {
             return this.w2;
+        }
+
+        public String getLabel() {
+            return this.label;
         }
     
         // Method to check if a word is either w1 or w2
@@ -64,6 +69,10 @@ public class calcWordsVectors {
             }
             return result;
         }  
+
+        public String toString(){
+            return this.getFirst() + Env.space + this.getSecond() + Env.space + this.getLabel();
+        }
     }
 
 	public static class MapperClass extends Mapper<Text, Text, Text, Text>{
@@ -91,13 +100,14 @@ public class calcWordsVectors {
 				if (parts.length == 3) {
 					String w1 = parts[0].toLowerCase();
 					String w2 = parts[1].toLowerCase();
+                    String label = parts[2].toLowerCase();
 					stemmer.setCurrent(w1);
 					stemmer.stem();
 					w1 = stemmer.getCurrent();
 					stemmer.setCurrent(w2);
 					stemmer.stem();
 					w2 = stemmer.getCurrent();
-                    wordPairs pair = new wordPairs(w1, w2);
+                    wordPairs pair = new wordPairs(w1, w2, label);
                     wordspairs.add(pair);
 				}
 			}
@@ -110,8 +120,8 @@ public class calcWordsVectors {
 			ArrayList<wordPairs> relatedPairs = wordPairs.filterByWord(word, wordspairs);
             newVal.set(word + Env.space + value.toString());
             for (wordPairs pair : relatedPairs) {
-                newKey.set(pair.getFirst() + Env.space + pair.getSecond());
-                context.write(newKey, newVal);      // key: w1 w2      val: w feature p1 p2 p3 p4
+                newKey.set(pair.toString());
+                context.write(newKey, newVal);      // key: w1 w2 label     val: w feature p1 p2 p3 p4
             }
         }
 
@@ -119,7 +129,6 @@ public class calcWordsVectors {
     }
 
 	public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-		private Text newKey = new Text();
 		private Text newValue = new Text();
 	
 		@Override
