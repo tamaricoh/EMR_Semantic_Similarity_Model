@@ -135,35 +135,47 @@ public class countsStep {
             if (key == null || key.toString().trim().isEmpty()) {
                 return;
             }
-
             String[] parts = key.toString().split(Env.SPACE);
             if (parts.length < 1) {
                 return;
             }
 
             String keyKind = parts[0];
-            ArrayList<String> vals = toArray(values);
-
+            ArrayList<String> vals = new ArrayList<>();
+			Double sum = 0.0;
+			String value;
+            for (Text val : values) {
+				value = val.toString();
+                if (val != null) {
+					String[] valParts = value.split(Env.SPACE);
+                    vals.add(value);
+					try {
+                        sum += Double.parseDouble(valParts[0]);
+                    } catch (NumberFormatException e) {
+                        System.err.println("[Tamar] Error parsing value: " + valParts[0]);
+                    }
+                }
+            }
+			value = String.valueOf(sum);
+			newVal.set(keyKind + Env.space + value);
             if (vals.isEmpty()) {
                 return;
             }
 
             switch (keyKind) {
                 case "count(F)":
-                    aws.sendSQSMessage(Env.F, sum(vals));
+                    aws.sendSQSMessage(Env.F, value);
                     break;
                 case "count(L)":
-                    aws.sendSQSMessage(Env.L, sum(vals));
+                    aws.sendSQSMessage(Env.L, value);
                     break;
                 case "count(l,f)":
                     if (parts.length >= 3) {
                         newKey.set(parts[1] + Env.space + parts[2]);
-                        newVal.set(keyKind + Env.space + sum(vals));
                         context.write(newKey, newVal);
                     }
                     break;
                 case "count(l)":
-                    newVal.set(keyKind + Env.space + sum(vals));
                     for (String val : vals) {
                         String[] valParts = val.split(Env.SPACE);
                         if (parts.length >= 2 && valParts.length >= 2) {
@@ -173,7 +185,6 @@ public class countsStep {
                     }
                     break;
                 case "count(f)":
-                    newVal.set(keyKind + Env.space + sum(vals));
                     for (String val : vals) {
                         String[] valParts = val.split(Env.SPACE);
                         if (parts.length >= 2 && valParts.length >= 2) {
@@ -183,31 +194,6 @@ public class countsStep {
                     }
                     break;
             }
-        }
-
-        private ArrayList<String> toArray(Iterable<Text> values) {
-            ArrayList<String> output = new ArrayList<>();
-            for (Text val : values) {
-                if (val != null) {
-                    output.add(val.toString());
-                }
-            }
-            return output;
-        }
-
-        private String sum(ArrayList<String> values) {
-            double sum = 0.0;
-            for (String val : values) {
-                String[] valParts = val.split(Env.SPACE);
-                if (valParts.length >= 1) {
-                    try {
-                        sum += Double.parseDouble(valParts[0]);
-                    } catch (NumberFormatException e) {
-                        System.err.println("[Tamar] Error parsing value: " + valParts[0]);
-                    }
-                }
-            }
-            return String.valueOf(sum);
         }
     }
 
