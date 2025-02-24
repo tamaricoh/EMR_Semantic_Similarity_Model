@@ -9,15 +9,20 @@ public class Env {
     public static final String space = " "; 
     public static final String FORWARD_SLASH = "/";
     public static final String DASH = "-";
+    // public static final String DEL = "$$";
     public static final String inputBucket = "Ngram";
 
     //to run change these:
     public static String wordRelatednessFile = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\src\\main\\java\\dsp3\\resources\\word-relatedness.txt";
+    public static String wordSimilarityClassifier = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\target\\classifier.jar";
     public static String wordRelatednessKey = "word-relatedness.txt";
+    public static String csvName = "word_similarity.csv";
+    public static String outputName = "classification_results.txt";
+    public static String csvFileLoc = "step3/" + csvName;
     public static final String PATH_TO_TARGET = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\target\\";
     public static final String corpusTest = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\test.txt";
     // public static boolean localAggregationCommand = false;
-    public static final int instanceCount = 1;
+    public static final int instanceCount = 9;
     public static final String PROJECT_NAME = "semantic-similarity";
     public static final String Logs_URI = "s3://" + PROJECT_NAME + "/logs";
     // public static final String C0_SQS = "c0-" + PROJECT_NAME;
@@ -54,7 +59,7 @@ public class Env {
         switch (stepNum){
             case 0:
                 args = new String[]{ 
-                    "s3://" + TEST_BUCKET_PATH + "/" + "test.txt", //TODO -change to correct input
+                    "s3://biarcs/",
                     "s3://" + PROJECT_NAME + "/" + Step_Output_Name[0]
                 };
                 break;
@@ -70,12 +75,6 @@ public class Env {
                     "s3://" + PROJECT_NAME + "/" + Step_Output_Name[2] // output
                 };
                 break;
-            // case 3:
-            //     args = new String[]{
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[2], // input
-            //         "s3://" + PROJECT_NAME + "/" + Step_Output_Name[3] // output
-            //     };
-            //     break;
             default:
                 args = new String[]{};
         }
