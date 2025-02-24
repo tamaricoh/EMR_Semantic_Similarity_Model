@@ -35,6 +35,13 @@ public class countsStep {
             }
 
             String count = parts[2];
+			double countDouble = 0.0;
+			try {
+				countDouble = Double.parseDouble(count);
+			} catch (Exception e) {
+				System.err.println("[Tamar] Error parsing count: " + count);
+			}
+
             String[] wordsInfo = parts[1].split(Env.SPACE);
 
             List<WordPosition> words = new ArrayList<>();
@@ -65,14 +72,13 @@ public class countsStep {
 
             Collections.sort(words);
             List<String> relatedFeatures = new ArrayList<>();
-
+			Double countL = 0.0;
+			Double countF = 0.0;
             for (WordPosition word1 : words) {
                 relatedFeatures.clear();
                 for (WordPosition word2 : words) {
                     if (word1.position == word2.relatedTo) {
-                        newKey.set("count(F)");
-                        newVal.set(count);
-                        context.write(newKey, newVal);
+                        countF = countF + countDouble;
 
                         String f = word2.word + Env.DASH + word2.dependencyLabel;
                         newKey.set("count(l,f)" + Env.space + word1.word + Env.space + f);
@@ -86,23 +92,22 @@ public class countsStep {
                         relatedFeatures.add(f);
                     }
                 }
-
-                newKey.set("count(L)");
-                newVal.set(count);
-                context.write(newKey, newVal);
+				countL = countL + countDouble;
 
                 for (String relatedFeature : relatedFeatures) {
                     newKey.set("count(l)" + Env.space + word1.word);
-                    try {
-                        double countDouble = Double.parseDouble(count);
-                        double result = countDouble / relatedFeatures.size();
-                        newVal.set(result + Env.space + relatedFeature);
-                        context.write(newKey, newVal);
-                    } catch (NumberFormatException e) {
-                        System.err.println("[Tamar] Error parsing count: " + count);
-                    }
+                    double result = countDouble / relatedFeatures.size();
+                    newVal.set(String.valueOf(result) + Env.space + relatedFeature);
+                    context.write(newKey, newVal);
                 }
             }
+			newKey.set("count(F)");
+            newVal.set(String.valueOf(countF));
+            context.write(newKey, newVal);
+			newKey.set("count(L)");
+            newVal.set(String.valueOf(countL));
+            context.write(newKey, newVal);
+
         }
 
         private static class WordPosition implements Comparable<WordPosition> {
@@ -125,6 +130,32 @@ public class countsStep {
         }
     }
 
+	public class CombinerClass extends Reducer<Text, Text, Text, Text> {
+		private Text newVal = new Text();
+		@Override
+		protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			String keyStr = key.toString();
+			Double sum = 0.0;
+			if (keyStr.contentEquals("count(F)") || keyStr.contentEquals("count(L)") || keyStr.startsWith("count(l,f)") ){
+				for (Text val : values) {
+					sum = sum + Double.parseDouble(val.toString());
+				}
+			} else {
+				for (Text val : values) {
+					sum = sum + Double.parseDouble(val.toString().split(Env.SPACE)[0]);
+				}
+			}
+			newVal.set(String.valueOf(sum));
+			context.write(key, newVal);
+		}
+	}
+
+	public static class PartitionerClass extends Partitioner<Text, Text> {
+        @Override
+        public int getPartition(Text key, Text value, int numPartitions) {
+            return (numPartitions == 0) ? 0 : Math.abs(key.hashCode() % numPartitions);
+        }
+    }
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
         private Text newKey = new Text();
         private Text newVal = new Text();
@@ -197,12 +228,7 @@ public class countsStep {
         }
     }
 
-	public static class PartitionerClass extends Partitioner<Text, Text> {
-        @Override
-        public int getPartition(Text key, Text value, int numPartitions) {
-            return (numPartitions == 0) ? 0 : Math.abs(key.hashCode() % numPartitions);
-        }
-    }
+
 
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
@@ -213,6 +239,7 @@ public class countsStep {
 		job.setMapperClass(MapperClass.class);
 		job.setReducerClass(ReducerClass.class);
         job.setPartitionerClass(PartitionerClass.class);
+		job.setCombinerClass(CombinerClass.class);
 
 		job.setMapOutputKeyClass(Text.class);
 		job.setMapOutputValueClass(Text.class);
