@@ -11,6 +11,7 @@ import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.io.LongWritable;
@@ -130,23 +131,24 @@ public class countsStep {
         }
     }
 
-	public class CombinerClass extends Reducer<Text, Text, Text, Text> {
+	public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
 		private Text newVal = new Text();
 		@Override
 		protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 			String keyStr = key.toString();
 			Double sum = 0.0;
-			if (keyStr.contentEquals("count(F)") || keyStr.contentEquals("count(L)") || keyStr.startsWith("count(l,f)") ){
+			if (keyStr.startsWith("count(F)") || keyStr.startsWith("count(L)") || keyStr.startsWith("count(l,f)") ){
 				for (Text val : values) {
 					sum = sum + Double.parseDouble(val.toString());
 				}
-			} else {
-				for (Text val : values) {
-					sum = sum + Double.parseDouble(val.toString().split(Env.SPACE)[0]);
+				newVal.set(String.valueOf(sum));
+				context.write(key, newVal);
+			}
+			else {
+				for (Text val : values){
+					context.write(key, val);
 				}
 			}
-			newVal.set(String.valueOf(sum));
-			context.write(key, newVal);
 		}
 	}
 
@@ -163,9 +165,6 @@ public class countsStep {
 
         @Override
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            if (key == null || key.toString().trim().isEmpty()) {
-                return;
-            }
             String[] parts = key.toString().split(Env.SPACE);
             if (parts.length < 1) {
                 return;
@@ -202,8 +201,8 @@ public class countsStep {
                     break;
                 case "count(l,f)":
                     if (parts.length >= 3) {
-                        newKey.set(parts[1] + Env.space + parts[2]);
-                        context.write(newKey, newVal);
+                        // newKey.set(parts[1] + Env.space + parts[2]);
+                        // context.write(newKey, newVal);
                     }
                     break;
                 case "count(l)":

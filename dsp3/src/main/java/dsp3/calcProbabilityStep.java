@@ -5,18 +5,14 @@ import java.util.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
-import org.apache.hadoop.io.MapWritable;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.tartarus.snowball.ext.PorterStemmer;
 
 
@@ -87,8 +83,6 @@ public class calcProbabilityStep {
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 			Double[] counts = new Double[]{0.0, 0.0, 0.0}; // countf countl countlf
-			Double count_l = 0.0;
-			Double count_l_f = 0.0;
 			for (Text val : values) {
 				String[] parts = val.toString().split(Env.SPACE);
 				if (parts.length < 2) {

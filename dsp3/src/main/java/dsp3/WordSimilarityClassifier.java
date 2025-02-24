@@ -2,7 +2,7 @@ package dsp3;
 
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
-import weka.classifiers.trees.RandomForest;
+import weka.classifiers.bayes.NaiveBayes;
 import weka.core.Instances;
 import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils.DataSource;
@@ -44,7 +44,7 @@ public class wordSimilarityClassifier {
             Instances test = new Instances(data, trainSize, testSize);
     
             // Train classifier
-            Classifier classifier = new RandomForest();
+            Classifier classifier = new NaiveBayes();
             classifier.buildClassifier(train);
     
             // Cross-validation
