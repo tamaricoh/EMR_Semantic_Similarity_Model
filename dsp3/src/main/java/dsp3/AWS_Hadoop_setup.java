@@ -12,18 +12,17 @@ public class AWS_Hadoop_setup {
     
     public static void main(String[] args) {
         aws.createBucketIfNotExists(Env.PROJECT_NAME);
-        aws.createBucketIfNotExists(Env.TEST_BUCKET_PATH);
+        // aws.createBucketIfNotExists(Env.TEST_BUCKET_PATH);
         aws.createSqsQueue(Env.F);
         aws.createSqsQueue(Env.L);
 
-        aws.uploadFileToS3(Env.corpusTest ,Env.TEST_BUCKET_PATH);
+        // aws.uploadFileToS3(Env.corpusTest ,Env.TEST_BUCKET_PATH); 
         aws.uploadFileToS3(Env.wordRelatednessFile, Env.PROJECT_NAME);
+        aws.uploadFileToS3(Env.wordSimilarityClassifier, Env.PROJECT_NAME);
         //aws.uploadFileToS3(Env.testingFiles[0], Env.PROJECT_NAME); 
         for(int i =0; i<Env.Steps_Names.length; i++){
             aws.uploadFileToS3(Env.PATH_TO_TARGET + Env.Steps_Names[i] + ".jar", Env.PROJECT_NAME);
         } 
-
-        // TODO - also add WordSimilarityClassifier.jar to the bucket
 
         EmrClient emrClient = EmrClient.builder()
             .region(Env.region1)

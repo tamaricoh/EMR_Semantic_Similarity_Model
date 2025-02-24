@@ -34,6 +34,7 @@ public class AWS {
     private final SqsClient sqs;
     private final S3Client s3;
     public static Region region = Region.US_WEST_2;
+    // public static Region region = Region.US_EAST_1;
     private static final AWS instance = new AWS();
 
     private AWS() {
@@ -160,6 +161,8 @@ public class AWS {
         return ""; // Return this if no matching message is found
     }
 
+    
+
     public String downloadFromS3(String bucketName, String s3Key, String localPath) {
         try {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
@@ -167,7 +170,8 @@ public class AWS {
                 .key(s3Key)
                 .build();
 
-        Path destination = Paths.get(localPath, s3Key);
+        String fileName = Paths.get(s3Key).getFileName().toString();
+        Path destination = Paths.get(localPath, fileName);
         ResponseInputStream<GetObjectResponse> response = s3.getObject(getObjectRequest);
         
         File file = destination.toFile();

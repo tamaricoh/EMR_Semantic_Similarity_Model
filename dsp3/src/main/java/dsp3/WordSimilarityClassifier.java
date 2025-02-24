@@ -4,61 +4,112 @@ import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.trees.RandomForest;
 import weka.core.Instances;
+import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils.DataSource;
 import java.util.Random;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
 public class wordSimilarityClassifier {
 
-    public static Instances loadArffFromS3(String fileKey, String localPath) throws Exception {
-        AWS aws = AWS.getInstance();
-        aws.downloadFromS3(Env.PROJECT_NAME, fileKey, ""); // TODO - this should be a path to local directory in an EC2?
-        DataSource source = new DataSource(localPath);
-        return source.getDataSet();
-    }
+    static AWS aws = AWS.getInstance();
+
     public static void main(String[] args) {
         try {
-            // Load the dataset
-            Instances data = loadArffFromS3("word_similarity.arff", "");
+            // Instead of downloading from S3, use the path from the MapReduce step
+            String localCsvPath = "/tmp";  // Use temp directory in EMR
+            // String localCsvPath = "C:\\Users\\tamar\\Downloads";
+            aws.downloadFromS3(Env.PROJECT_NAME, Env.csvFileLoc, localCsvPath);
+            // String localCsvPath = Env.S3_BUCKET_PATH +"step3/word_similarity.csv";  // Pass the output directory as an argument
+            // String localCsvPath = "/tmp/word_similarity.csv";
+            // String localCsvPath = "C:\\Users\\tamar\\Downloads\\word_similarity.csv";  // Pass the output directory as an argument
+
+            // System.out.println("[TAMAR] "+localCsvPath);
+            // Load dataset from CSV
+            Instances data = loadCsv(localCsvPath+"/"+Env.csvName);
+
+            if (data == null) {
+                System.out.println("Failed to load data!");
+                return;
+            }
             
-            // Set the class index to the last attribute
+            // Set the class index to the last column (since CSV doesn't have predefined class attribute)
             data.setClassIndex(data.numAttributes() - 1);
-            
-            // Calculate split sizes
+    
+            // Split data into training and testing sets
             int trainSize = (int) Math.round(data.numInstances() * 0.8);
             int testSize = data.numInstances() - trainSize;
-            
-            // Create train/test split
             Instances train = new Instances(data, 0, trainSize);
             Instances test = new Instances(data, trainSize, testSize);
-            
-            // Create and train the classifier
+    
+            // Train classifier
             Classifier classifier = new RandomForest();
             classifier.buildClassifier(train);
-            
-            // Perform 10-fold cross-validation on training set
+    
+            // Cross-validation
             Evaluation trainEval = new Evaluation(train);
             trainEval.crossValidateModel(classifier, train, 10, new Random(42));
-            
-            System.out.println("=== 10-fold Cross-validation Results (Training Set) ===");
-            System.out.println("Precision (True class): " + trainEval.precision(1));
-            System.out.println("Recall (True class): " + trainEval.recall(1));
-            System.out.println("F1 Score (True class): " + trainEval.fMeasure(1));
-            
-            // Test the model on test set
+    
+            // Prepare to write results to file
+            // String outputFilePath = Env.S3_BUCKET_PATH + "/classification_results.txt";
+            // String outputFilePath = "C:\\Users\\tamar\\Downloads\\classification_results.txt";
+            String outputFilePath = localCsvPath + "/" + Env.outputName;
+            FileWriter writer = new FileWriter(outputFilePath);
+    
+            // Write Cross-validation results
+            writer.write("=== 10-fold Cross-validation Results ===\n");
+            writer.write("Precision: " + trainEval.precision(1) + "\n");
+            writer.write("Recall: " + trainEval.recall(1) + "\n");
+            writer.write("F1 Score: " + trainEval.fMeasure(1) + "\n");
+
+            writer.write("\n=== Training Set Confusion Matrix ===\n");
+            writer.write(trainEval.toMatrixString());
+
+            // Evaluate on test set
             Evaluation testEval = new Evaluation(train);
             testEval.evaluateModel(classifier, test);
-            
-            System.out.println("\n=== Test Set Results ===");
-            System.out.println("Precision (True class): " + testEval.precision(1));
-            System.out.println("Recall (True class): " + testEval.recall(1));
-            System.out.println("F1 Score (True class): " + testEval.fMeasure(1));
-            
-            // Print confusion matrix
-            System.out.println("\nConfusion Matrix:");
-            System.out.println(testEval.toMatrixString());
-            
+    
+            // Write Test Set results
+            writer.write("\n=== Test Set Results ===\n");
+            writer.write("Precision: " + testEval.precision(1) + "\n");
+            writer.write("Recall: " + testEval.recall(1) + "\n");
+            writer.write("F1 Score: " + testEval.fMeasure(1) + "\n");
+    
+            writer.write("\nConfusion Matrix:\n");
+            writer.write(testEval.toMatrixString());
+    
+            writer.close();  // Close the file writer
+    
+            // Upload the file to S3
+            // String bucketName = Env.PROJECT_NAME;
+            aws.uploadFileToS3(outputFilePath, Env.PROJECT_NAME);
+    
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    // Your existing loadCsv method
+    public static Instances loadCsv(String csvFilePath) {
+        try {
+            CSVLoader loader = new CSVLoader();
+            File csvFile = new File(csvFilePath);
+            
+            // Add debug prints
+            System.out.println("Attempting to load CSV from: " + csvFilePath);
+            System.out.println("File exists: " + csvFile.exists());
+            System.out.println("File absolute path: " + csvFile.getAbsolutePath());
+            
+            if (!csvFile.exists()) {
+                throw new IOException("CSV file not found at: " + csvFilePath);
+            }
+            
+            loader.setSource(csvFile);
+            return loader.getDataSet();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 }

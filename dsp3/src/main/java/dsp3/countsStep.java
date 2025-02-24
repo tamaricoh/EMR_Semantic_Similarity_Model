@@ -5,203 +5,212 @@ import java.util.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
-import org.apache.hadoop.io.DoubleWritable;
-//import org.apache.hadoop.io.DoubleWritable;
-//import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.MapWritable;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.tartarus.snowball.ext.PorterStemmer;
-
-
 
 public class countsStep {
 
-	public static class MapperClass extends Mapper<LongWritable, Text, Text, Text>{
-		private Text newKey = new Text();
-		private Text newVal = new Text();
+    public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
+        private Text newKey = new Text();
+        private Text newVal = new Text();
 
-		@Override
-		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+        @Override
+        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+            if (value == null || value.toString().trim().isEmpty()) {
+                return;
+            }
 
-			String[] parts = value.toString().split(Env.TAB);
+            String[] parts = value.toString().split(Env.TAB);
+            if (parts.length < 3) {
+                System.err.println("[Tamar] Warning: Skipping malformed input line: " + value);
+                return;
+            }
 
-			String count = parts[2];
-			
-			String[] wordsInfo = parts[1].toString().split(Env.SPACE);
-			
-			// Extract only the words and their positions from the dependency parse
-			List<WordPosition> words = new ArrayList<>();
-			PorterStemmer stemmer = new PorterStemmer(); // Create an instance of the stemmer
+            String count = parts[2];
+            String[] wordsInfo = parts[1].split(Env.SPACE);
 
-			for (int i = 0; i < wordsInfo.length; i++) {
-				String[] wordInfo = wordsInfo[i].split(Env.FORWARD_SLASH);
-				if (wordInfo.length >= 4) {
-					String originalWord = wordInfo[0].toLowerCase();
-					
-					// Apply the stemmer to the original word
-					stemmer.setCurrent(originalWord);
-					stemmer.stem();
-					String stemmedWord = stemmer.getCurrent(); // Get the stemmed word
-					
-					String dependencyLabel = wordInfo[1].toLowerCase();
-					int relatedTo = Integer.parseInt(wordInfo[3]);
-					int position = i + 1;
-					
-					// Add the stemmed word instead of the original word
-					words.add(new WordPosition(stemmedWord, position, dependencyLabel, relatedTo));
-				} else {
-					System.err.println("[Tamar] Warning: Skipping malformed word info: " + wordsInfo[i]);
-				}
-			}
+            List<WordPosition> words = new ArrayList<>();
+            PorterStemmer stemmer = new PorterStemmer();
 
-			
-			// Sort words according to compareTo func
-			Collections.sort(words);
-			List<String> relatedFeatures = new ArrayList<>();
+            for (String wordData : wordsInfo) {
+                String[] wordInfo = wordData.split(Env.FORWARD_SLASH);
+                if (wordInfo.length < 4) {
+                    System.err.println("[Tamar] Warning: Skipping malformed word info: " + wordData);
+                    continue;
+                }
 
-			for (int i = 0; i < words.size(); i++) {
-				WordPosition word1 = words.get(i);
-				relatedFeatures.clear();
-				for (int j = 0; j < words.size(); j++) {
-					WordPosition word2 = words.get(j);
-					
-					if (word1.position == word2.relatedTo) {
-						// count(F)
-						newKey.set("count(F)");
-						newVal.set(count);
-						context.write(newKey, newVal);
+                String originalWord = wordInfo[0].toLowerCase();
+                stemmer.setCurrent(originalWord);
+                stemmer.stem();
+                String stemmedWord = stemmer.getCurrent();
 
-						// count(l,f)
-						String f = word2.word + Env.DASH + word2.dependencyLabel;
-						newKey.set("count(l,f)" + Env.space + word1.word + Env.space + f);
-						newVal.set(count);
-						context.write(newKey, newVal);
+                String dependencyLabel = wordInfo[1].toLowerCase();
+                String relatedToStr = wordInfo[3];
 
-						// count(f)
-						newKey.set("count(f)" + Env.space + f);
-						newVal.set(count + Env.space +  word1.word);
-						context.write(newKey, newVal);
+                try {
+                    int relatedTo = Integer.parseInt(relatedToStr);
+                    words.add(new WordPosition(stemmedWord, words.size() + 1, dependencyLabel, relatedTo));
+                } catch (NumberFormatException e) {
+                    System.err.println("[Tamar] Skipping invalid relatedTo value: " + relatedToStr);
+                }
+            }
 
-						relatedFeatures.add(f);
+            Collections.sort(words);
+            List<String> relatedFeatures = new ArrayList<>();
 
-					}
+            for (WordPosition word1 : words) {
+                relatedFeatures.clear();
+                for (WordPosition word2 : words) {
+                    if (word1.position == word2.relatedTo) {
+                        newKey.set("count(F)");
+                        newVal.set(count);
+                        context.write(newKey, newVal);
 
-				}
-				// count(L)
-				newKey.set("count(L)");
-				newVal.set(count);
-				context.write(newKey, newVal);
+                        String f = word2.word + Env.DASH + word2.dependencyLabel;
+                        newKey.set("count(l,f)" + Env.space + word1.word + Env.space + f);
+                        newVal.set(count);
+                        context.write(newKey, newVal);
 
-				// count(l)
-				for (String relatedFeature : relatedFeatures){
-					newKey.set("count(l)" + Env.space + word1.word); 
-					double countDouble = Double.parseDouble(count);
-					double result = countDouble / relatedFeatures.size();
-					String resultString = Double.toString(result);
-					newVal.set(resultString + Env.space + relatedFeature);
-					context.write(newKey, newVal);
-				}
-			}
-		}
-		
-		private static class WordPosition implements Comparable<WordPosition> {
-			String word;
-			int position;
-			String dependencyLabel;
-			int relatedTo;
-		
-			WordPosition(String word, int position, String dependencyLabel, int relatedTo) {
-				this.word = word;
-				this.position = position;
-				this.dependencyLabel = dependencyLabel;
-				this.relatedTo = relatedTo;
-			}
-		
-			@Override
-			public int compareTo(WordPosition other) {
-				// Compare based on position
-				return Integer.compare(this.position, other.position);
-			}
-		}  
-	}
+                        newKey.set("count(f)" + Env.space + f);
+                        newVal.set(count + Env.space + word1.word);
+                        context.write(newKey, newVal);
 
-	public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-		private Text newKey = new Text();
-		private Text newVal = new Text();
-		static AWS aws = AWS.getInstance();
-		
-		@Override
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			// for (Text value : values) {
-			// 	newKey.set(key);    // Set the key
-			// 	newVal.set(value);  // Set the corresponding value
-			// 	context.write(newKey, newVal); // Write the key-value pair to the output
-			// }
-			String[] parts = key.toString().split(Env.SPACE);
-			String keyKind = parts[0];
-			ArrayList<String> vals = toArray(values);
-			
+                        relatedFeatures.add(f);
+                    }
+                }
 
-			switch (keyKind){
-				case "count(F)":
-					aws.sendSQSMessage(Env.F, sum(vals));
-					break;
-				case "count(L)":
-					aws.sendSQSMessage(Env.L, sum(vals));
-					break;
-				case "count(l,f)":
-					newKey.set(parts[1] + Env.space + parts[2]);
-					newVal.set(keyKind + Env.space + sum(vals));
-					context.write(newKey, newVal);
-					break;
-				case "count(l)":
-					newVal.set(keyKind + Env.space + sum(vals));
-					for (String val : vals){
-						String f = val.split(Env.SPACE)[1];
-						newKey.set(parts[1] + Env.space + f);
-						context.write(newKey, newVal);
-					}
-					break;
-				case "count(f)":
-					newVal.set(keyKind + Env.space + sum(vals));
-					for (String val : vals){
-						String l = val.split(Env.SPACE)[1];
-						newKey.set(l + Env.space + parts[1]);
-						context.write(newKey, newVal);
-					}
-					break;
-			}
-		}
+                newKey.set("count(L)");
+                newVal.set(count);
+                context.write(newKey, newVal);
 
-		private ArrayList<String> toArray(Iterable<Text> values){
-			ArrayList<String> output = new ArrayList<String>();
-			for (Text val : values) {
-				output.add(val.toString());
-			}
-			return output;
-		}
+                for (String relatedFeature : relatedFeatures) {
+                    newKey.set("count(l)" + Env.space + word1.word);
+                    try {
+                        double countDouble = Double.parseDouble(count);
+                        double result = countDouble / relatedFeatures.size();
+                        newVal.set(result + Env.space + relatedFeature);
+                        context.write(newKey, newVal);
+                    } catch (NumberFormatException e) {
+                        System.err.println("[Tamar] Error parsing count: " + count);
+                    }
+                }
+            }
+        }
 
-		private String sum(ArrayList<String> values){
-			Double sum = 0.0;
-			for (String val : values) {
-				sum += Double.parseDouble(val.split(Env.SPACE)[0]);
-			}
+        private static class WordPosition implements Comparable<WordPosition> {
+            String word;
+            int position;
+            String dependencyLabel;
+            int relatedTo;
 
-			return String.valueOf(sum);	
-		}
-	}
+            WordPosition(String word, int position, String dependencyLabel, int relatedTo) {
+                this.word = word;
+                this.position = position;
+                this.dependencyLabel = dependencyLabel;
+                this.relatedTo = relatedTo;
+            }
+
+            @Override
+            public int compareTo(WordPosition other) {
+                return Integer.compare(this.position, other.position);
+            }
+        }
+    }
+
+    public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
+        private Text newKey = new Text();
+        private Text newVal = new Text();
+        static AWS aws = AWS.getInstance();
+
+        @Override
+        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            if (key == null || key.toString().trim().isEmpty()) {
+                return;
+            }
+
+            String[] parts = key.toString().split(Env.SPACE);
+            if (parts.length < 1) {
+                return;
+            }
+
+            String keyKind = parts[0];
+            ArrayList<String> vals = toArray(values);
+
+            if (vals.isEmpty()) {
+                return;
+            }
+
+            switch (keyKind) {
+                case "count(F)":
+                    aws.sendSQSMessage(Env.F, sum(vals));
+                    break;
+                case "count(L)":
+                    aws.sendSQSMessage(Env.L, sum(vals));
+                    break;
+                case "count(l,f)":
+                    if (parts.length >= 3) {
+                        newKey.set(parts[1] + Env.space + parts[2]);
+                        newVal.set(keyKind + Env.space + sum(vals));
+                        context.write(newKey, newVal);
+                    }
+                    break;
+                case "count(l)":
+                    newVal.set(keyKind + Env.space + sum(vals));
+                    for (String val : vals) {
+                        String[] valParts = val.split(Env.SPACE);
+                        if (parts.length >= 2 && valParts.length >= 2) {
+                            newKey.set(parts[1] + Env.space + valParts[1]);
+                            context.write(newKey, newVal);
+                        }
+                    }
+                    break;
+                case "count(f)":
+                    newVal.set(keyKind + Env.space + sum(vals));
+                    for (String val : vals) {
+                        String[] valParts = val.split(Env.SPACE);
+                        if (parts.length >= 2 && valParts.length >= 2) {
+                            newKey.set(valParts[1] + Env.space + parts[1]);
+                            context.write(newKey, newVal);
+                        }
+                    }
+                    break;
+            }
+        }
+
+        private ArrayList<String> toArray(Iterable<Text> values) {
+            ArrayList<String> output = new ArrayList<>();
+            for (Text val : values) {
+                if (val != null) {
+                    output.add(val.toString());
+                }
+            }
+            return output;
+        }
+
+        private String sum(ArrayList<String> values) {
+            double sum = 0.0;
+            for (String val : values) {
+                String[] valParts = val.split(Env.SPACE);
+                if (valParts.length >= 1) {
+                    try {
+                        sum += Double.parseDouble(valParts[0]);
+                    } catch (NumberFormatException e) {
+                        System.err.println("[Tamar] Error parsing value: " + valParts[0]);
+                    }
+                }
+            }
+            return String.valueOf(sum);
+        }
+    }
+
 	public static class PartitionerClass extends Partitioner<Text, Text> {
         @Override
         public int getPartition(Text key, Text value, int numPartitions) {
@@ -229,9 +238,11 @@ public class countsStep {
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		// job.setOutputFormatClass(TextOutputFormat.class);
 
-		FileInputFormat.addInputPath(job, new Path(args[1]));
+		// FileInputFormat.addInputPath(job, new Path(args[1]));
+		for (int i = 0; i < 1; i++) { //TODO
+			FileInputFormat.addInputPath(job, new Path(args[1] + i + ".txt"));
+		}
 		FileOutputFormat.setOutputPath(job, new Path(args[2]));
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
 	}
-
 }
