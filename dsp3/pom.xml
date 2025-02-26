@@ -58,11 +58,11 @@
       <artifactId>hadoop-client</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
-    <dependency>
+    <!-- <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-analyzers-common</artifactId>
       <version>8.11.0</version>
-    </dependency>
+    </dependency> -->
 
     <!-- New Dependencies -->
     <!-- AWS SDK v2 -->
@@ -240,9 +240,9 @@
           </plugins>
         </build>
       </profile>
-      <!-- step4 -->
+      <!-- classifier -->
       <profile>
-        <id>step4</id>
+        <id>classifier</id>
         <build>
           <plugins>
             <plugin>
@@ -250,16 +250,16 @@
               <artifactId>maven-shade-plugin</artifactId>
               <executions>
                 <execution>
-                  <id>step4</id>
+                  <id>classifier</id>
                   <phase>package</phase>
                   <goals>
                     <goal>shade</goal>
                   </goals>
                   <configuration>
-                    <outputFile>${project.build.directory}/step4.jar</outputFile>
+                    <outputFile>${project.build.directory}/classifier.jar</outputFile>
                     <transformers>
                       <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                        <mainClass>dsp3.sequenceToArffStep</mainClass>
+                        <mainClass>dsp3.wordSimilarityClassifier</mainClass>
                       </transformer>
                     </transformers>
                   </configuration>

@@ -301,7 +301,7 @@ public class calcWordsVectors {
                     newArray[(6 * i) + 5] = originalArray[(10 * i) + 9];
                 }
 
-                newValue.set(arrayToString(wordspairs.get(pair))); //TODO - needed????
+                newValue.set(arrayToString(newArray));
                 newKey.set(pair.toString());
                 context.write(newKey, newValue);
         
@@ -400,10 +400,10 @@ public class calcWordsVectors {
             
             // Calculate divargence = KL(P||M) + KL(Q||M)
             double divergence = 0.0;
-            if (w1Probs[i] != 0){
+            if (w1Probs[i] != 0 && midpoint != 0){
                 divergence += w1Probs[i] * Math.log(w1Probs[i] / midpoint);
             }
-            if (w2Probs[i] != 0){
+            if (w2Probs[i] != 0 && midpoint != 0){
                 divergence += w2Probs[i] * Math.log(w2Probs[i] / midpoint);
             }            
             return divergence;

@@ -201,8 +201,8 @@ public class countsStep {
                     break;
                 case "count(l,f)":
                     if (parts.length >= 3) {
-                        // newKey.set(parts[1] + Env.space + parts[2]);
-                        // context.write(newKey, newVal);
+                        newKey.set(parts[1] + Env.space + parts[2]);
+                        context.write(newKey, newVal);
                     }
                     break;
                 case "count(l)":
@@ -251,7 +251,7 @@ public class countsStep {
 		// job.setOutputFormatClass(TextOutputFormat.class);
 
 		// FileInputFormat.addInputPath(job, new Path(args[1]));
-		for (int i = 0; i < 1; i++) { //TODO
+		for (int i = 0; i < 99; i++) { //TODO
 			FileInputFormat.addInputPath(job, new Path(args[1] + i + ".txt"));
 		}
 		FileOutputFormat.setOutputPath(job, new Path(args[2]));

@@ -23,7 +23,7 @@ public class Env {
     public static final String corpusTest = "C:\\Users\\tamar\\Desktop\\B.Sc\\Semester G\\AWS\\Assignment_3\\dsp3\\test.txt";
     // public static boolean localAggregationCommand = false;
     public static final int instanceCount = 9;
-    public static final String PROJECT_NAME = "semantic-similarity";
+    public static final String PROJECT_NAME = "semantic-similarity-full-run";
     public static final String Logs_URI = "s3://" + PROJECT_NAME + "/logs";
     // public static final String C0_SQS = "c0-" + PROJECT_NAME;
 
@@ -45,8 +45,8 @@ public class Env {
     public static final String S3_BUCKET_PATH = "s3://" + PROJECT_NAME + "/";
     public static final String FEATURE_SET_PATH =  S3_BUCKET_PATH + "feature-set";
     public static final String LEMMATA_SET_PATH = S3_BUCKET_PATH + "lemmata-set";
-    public static final String[] Steps_Names = {"step1", "step2",};// "step3"}; //TODO
-    public static final String[] Step_Output_Name = {"step1", "step2",};// "step3"}; //TODO
+    public static final String[] Steps_Names = {"step1", "step2", "step3"};
+    public static final String[] Step_Output_Name = {"step1", "step2","step3"};
 
     public static String getStepJarPath(int i){
         return  getPathS3(Steps_Names[i], ".jar");
