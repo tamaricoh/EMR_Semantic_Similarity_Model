@@ -12,6 +12,7 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.tartarus.snowball.ext.PorterStemmer;
 
@@ -76,7 +77,10 @@ public class calcProbabilityStep {
 		}
 
         private static Double parseCountFromSQS(String SQS_name) {
-            String count = AWS.getInstance().checkSQSQueue(SQS_name);
+            String count = "";
+			while(count == ""){
+				count = AWS.getInstance().checkSQSQueue(SQS_name);
+			}
             return Double.parseDouble(count);
         }
 	
@@ -124,15 +128,14 @@ public class calcProbabilityStep {
 
 		private Double[] getMeasures(Double[] counts){
 			Double[] measures = new Double[4];
-			measures[0] = counts[2];
-			measures[1] = counts[2]/counts[1];
-			Double a = counts[2]/F;
-			Double b = counts[1]/L*counts[0]/F;
+			measures[0] = counts[2]; // count(l,f)
+			measures[1] = (counts[1] == 0) ? 0.0 : counts[2]/counts[1]; // count(l,f)/count(l)
+			Double a = counts[2]/F;  // count(l,f)/count(F)
+			Double b = (counts[0] == 0) ? 0.0 : ((counts[1] / L) * (counts[0] / F)); //(count(l)/count(L)) * (count(f)/count(F))
 
-			measures[2] = Math.log(a/b);
-			measures[3] = (a-b)/Math.sqrt(b);
+			measures[2] = (b == 0) ? 0.0 : Math.log(a/b); 
+			measures[3] = (b == 0) ? 0.0 : (a-b)/Math.sqrt(b);
 			return measures;
-			
 		}
 
 	}
